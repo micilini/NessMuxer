@@ -1,0 +1,70 @@
+# Build
+build/
+out/
+cmake-build-*/
+x64/
+Debug/
+Release/
+*.obj
+*.o
+*.lib
+*.exp
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.idb
+*.suo
+*.sdf
+*.opensdf
+*.log
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Visual Studio
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.ncb
+*.user
+*.aps
+*.cachefile
+*.psess
+*.vsp
+*.vspx
+ipch/
+*.VC.db
+*.VC.VC.opendb
+enc_temp_folder/
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Test artifacts
+test_ebml.bin
+test_encoder.h264
+test_full_pipeline.mkv
+test_100frames.mkv
+test_empty.mkv
+test_single.mkv
+*.h264
+*.mkv
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Third-party dependencies (keep folder structure, ignore contents)
+third_party/*
+!third_party/.gitkeep
+!third_party/README.md
