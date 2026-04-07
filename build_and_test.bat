@@ -119,6 +119,7 @@ if exist "%RELEASE_DIR%\test_full_pipeline.exe" (echo   [OK] test_full_pipeline.
 if exist "%RELEASE_DIR%\nessmux.exe"         (echo   [OK] nessmux.exe)         else (echo   [MISSING] nessmux.exe)
 if exist "%RELEASE_DIR%\nessmux_validate.exe" (echo   [OK] nessmux_validate.exe) else (echo   [MISSING] nessmux_validate.exe)
 if exist "%RELEASE_DIR%\nessmux_bench.exe"   (echo   [OK] nessmux_bench.exe)   else (echo   [MISSING] nessmux_bench.exe)
+if exist "%RELEASE_DIR%\test_n148_codec.exe" (echo   [OK] test_n148_codec.exe) else (echo   [INFO] test_n148_codec.exe - optional)
 echo.
 
 :: =========================================================================
@@ -181,6 +182,17 @@ if %errorlevel% equ 0 (
     set /a PASS_COUNT+=1
 ) else (
     echo [FAIL] test_full_pipeline (exit code: %errorlevel%)
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_codec ---
+"%RELEASE_DIR%\test_n148_codec.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_codec
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_codec
     set /a FAIL_COUNT+=1
 )
 echo.

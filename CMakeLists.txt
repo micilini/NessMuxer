@@ -206,8 +206,30 @@ endif()
 if(NESS_USE_N148)
     target_compile_definitions(NessMuxer PRIVATE NESS_HAVE_N148)
     target_compile_definitions(test_full_pipeline PRIVATE NESS_HAVE_N148)
-    # Fonte files do N.148 serao adicionados aqui nas proximas fases
+
+    target_sources(NessMuxer PRIVATE
+        src/codec/n148/n148_bitstream.c
+        src/codec/n148/n148_codec_private.c
+        src/codec/n148/n148_codec.c
+        src/decoder/n148/n148_decoder.c
+        src/decoder/n148/n148_parser.c
+        src/decoder/n148/n148_frame_recon.c
+        src/decoder/n148/n148_motion.c
+        src/decoder/n148/n148_dpb.c
+    )
 endif()
+
+add_executable(test_n148_codec
+    test/test_n148_codec.c
+    src/codec/n148/n148_bitstream.c
+    src/codec/n148/n148_codec_private.c
+    src/decoder/n148/n148_decoder.c
+    src/decoder/n148/n148_parser.c
+    src/decoder/n148/n148_frame_recon.c
+    src/decoder/n148/n148_motion.c
+    src/decoder/n148/n148_dpb.c
+)
+target_include_directories(test_n148_codec PRIVATE src)
 
 # ===========================================================================
 # CLI Tools
