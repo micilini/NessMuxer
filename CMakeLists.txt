@@ -216,7 +216,27 @@ if(NESS_USE_N148)
         src/decoder/n148/n148_frame_recon.c
         src/decoder/n148/n148_motion.c
         src/decoder/n148/n148_dpb.c
+        src/encoder/n148/n148_encoder.c
+        src/encoder/n148/n148_intra.c
+        src/encoder/n148/n148_transform.c
+        src/encoder/n148/n148_quant.c
+        src/encoder/n148/n148_entropy_enc_cavlc.c
+        src/encoder/n148/n148_ratecontrol_basic.c
     )
+
+    target_sources(test_full_pipeline PRIVATE
+    src/codec/n148/n148_bitstream.c
+    src/codec/n148/n148_codec_private.c
+    src/codec/n148/n148_codec.c
+    src/decoder/n148/n148_parser.c
+    src/decoder/n148/n148_frame_recon.c
+    src/encoder/n148/n148_encoder.c
+    src/encoder/n148/n148_intra.c
+    src/encoder/n148/n148_transform.c
+    src/encoder/n148/n148_quant.c
+    src/encoder/n148/n148_entropy_enc_cavlc.c
+    src/encoder/n148/n148_ratecontrol_basic.c
+)
 endif()
 
 add_executable(test_n148_codec
@@ -243,6 +263,25 @@ add_executable(test_n148_mux
     src/decoder/n148/n148_parser.c
 )
 target_include_directories(test_n148_mux PRIVATE src)
+
+add_executable(test_n148_encoder
+    test/test_n148_encoder.c
+    src/codec/n148/n148_bitstream.c
+    src/codec/n148/n148_codec_private.c
+    src/codec/n148/n148_codec.c
+    src/decoder/n148/n148_decoder.c
+    src/decoder/n148/n148_parser.c
+    src/decoder/n148/n148_frame_recon.c
+    src/decoder/n148/n148_motion.c
+    src/decoder/n148/n148_dpb.c
+    src/encoder/n148/n148_encoder.c
+    src/encoder/n148/n148_intra.c
+    src/encoder/n148/n148_transform.c
+    src/encoder/n148/n148_quant.c
+    src/encoder/n148/n148_entropy_enc_cavlc.c
+    src/encoder/n148/n148_ratecontrol_basic.c
+)
+target_include_directories(test_n148_encoder PRIVATE src)
 
 # ===========================================================================
 # CLI Tools

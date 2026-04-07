@@ -74,6 +74,7 @@ echo.
 set "CMAKE_ARGS=-B "%BUILD_DIR%" -A x64"
 set "CMAKE_ARGS=%CMAKE_ARGS% -DNESS_USE_X264=%USE_X264%"
 set "CMAKE_ARGS=%CMAKE_ARGS% -DNESS_USE_NVENC=%USE_NVENC%"
+set "CMAKE_ARGS=%CMAKE_ARGS% -DNESS_USE_N148=ON"
 
 if "%USE_X264%"=="ON" (
     set "CMAKE_ARGS=%CMAKE_ARGS% -DNESS_X264_INCLUDE_DIR="%X264_HEADERS%""
@@ -119,8 +120,9 @@ if exist "%RELEASE_DIR%\test_full_pipeline.exe" (echo   [OK] test_full_pipeline.
 if exist "%RELEASE_DIR%\nessmux.exe"         (echo   [OK] nessmux.exe)         else (echo   [MISSING] nessmux.exe)
 if exist "%RELEASE_DIR%\nessmux_validate.exe" (echo   [OK] nessmux_validate.exe) else (echo   [MISSING] nessmux_validate.exe)
 if exist "%RELEASE_DIR%\nessmux_bench.exe"   (echo   [OK] nessmux_bench.exe)   else (echo   [MISSING] nessmux_bench.exe)
-if exist "%RELEASE_DIR%\test_n148_codec.exe" (echo   [OK] test_n148_codec.exe) else (echo   [INFO] test_n148_codec.exe - optional)
-if exist "%RELEASE_DIR%\test_n148_mux.exe"   (echo   [OK] test_n148_mux.exe)   else (echo   [INFO] test_n148_mux.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_codec.exe"   (echo   [OK] test_n148_codec.exe)   else (echo   [INFO] test_n148_codec.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_mux.exe"     (echo   [OK] test_n148_mux.exe)     else (echo   [INFO] test_n148_mux.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_encoder.exe" (echo   [OK] test_n148_encoder.exe) else (echo   [INFO] test_n148_encoder.exe - optional)
 echo.
 
 :: =========================================================================
@@ -209,6 +211,17 @@ if %errorlevel% equ 0 (
 )
 echo.
 
+echo --- test_n148_encoder ---
+"%RELEASE_DIR%\test_n148_encoder.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_encoder
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_encoder
+    set /a FAIL_COUNT+=1
+)
+echo.
+
 if exist "test_n148_mux.mkv" (
     echo --- nessmux_validate test_n148_mux.mkv ---
     "%RELEASE_DIR%\nessmux_validate.exe" "test_n148_mux.mkv"
@@ -278,6 +291,17 @@ if %errorlevel% equ 0 (
 )
 echo.
 
+:: --- CLI Test: nessmux com encoder N148 ---
+echo --- nessmux (encoder: n148 / codec: n148) ---
+set "OUT_N148=%TEST_OUTPUT_DIR%\screen_n148.mkv"
+"%RELEASE_DIR%\nessmux.exe" "%RAW_FILE%" "%OUT_N148%" --width %WIDTH% --height %HEIGHT% --fps %FPS% --bitrate %BITRATE% --encoder n148 --codec n148
+if %errorlevel% equ 0 (
+    echo [PASS] nessmux n148
+) else (
+    echo [FAIL] nessmux n148 (exit code: %errorlevel%)
+)
+echo.
+
 :: --- CLI Test: nessmux com encoder x264 (se compilado) ---
 if "%USE_X264%"=="ON" (
     echo --- nessmux [encoder=x264] ---
@@ -325,6 +349,13 @@ if exist "%OUT_MF%" (
     echo Validating: screen_mf.mkv
     "%RELEASE_DIR%\nessmux_validate.exe" "%OUT_MF%"
     if %errorlevel% equ 0 (echo [PASS] validate mf) else (echo [FAIL] validate mf)
+    echo.
+)
+
+if exist "%OUT_N148%" (
+    echo Validating: screen_n148.mkv
+    "%RELEASE_DIR%\nessmux_validate.exe" "%OUT_N148%"
+    if %errorlevel% equ 0 (echo [PASS] validate n148) else (echo [FAIL] validate n148)
     echo.
 )
 
@@ -378,9 +409,10 @@ echo  Binaries:   %RELEASE_DIR%
 echo.
 if exist "%TEST_OUTPUT_DIR%\screen_auto.mkv" (
     echo  Output MKVs:
-    if exist "%TEST_OUTPUT_DIR%\screen_auto.mkv"  echo    - %TEST_OUTPUT_DIR%\screen_auto.mkv
-    if exist "%TEST_OUTPUT_DIR%\screen_mf.mkv"    echo    - %TEST_OUTPUT_DIR%\screen_mf.mkv
-    if exist "%TEST_OUTPUT_DIR%\screen_x264.mkv"  echo    - %TEST_OUTPUT_DIR%\screen_x264.mkv
+    if exist "%TEST_OUTPUT_DIR%\screen_auto.mkv"   echo    - %TEST_OUTPUT_DIR%\screen_auto.mkv
+    if exist "%TEST_OUTPUT_DIR%\screen_mf.mkv"     echo    - %TEST_OUTPUT_DIR%\screen_mf.mkv
+    if exist "%TEST_OUTPUT_DIR%\screen_n148.mkv"   echo    - %TEST_OUTPUT_DIR%\screen_n148.mkv
+    if exist "%TEST_OUTPUT_DIR%\screen_x264.mkv"   echo    - %TEST_OUTPUT_DIR%\screen_x264.mkv
     if exist "%TEST_OUTPUT_DIR%\screen_nvenc.mkv"  echo    - %TEST_OUTPUT_DIR%\screen_nvenc.mkv
     echo.
     echo  Dica: abra os MKVs com ffplay ou VLC para verificar visualmente:
