@@ -27,8 +27,14 @@ typedef enum {
     NESS_ENCODER_X264 = 2,
     NESS_ENCODER_NVENC = 3,
     NESS_ENCODER_VIDEOTOOLBOX = 4,
-    NESS_ENCODER_V4L2 = 5
+    NESS_ENCODER_V4L2 = 5,
+    NESS_ENCODER_N148 = 148
 } NessEncoderType;
+
+typedef enum {
+    NESS_CODEC_AVC  = 1,
+    NESS_CODEC_N148 = 148
+} NessCodecType;
 
 typedef struct {
     const char* output_path;    
@@ -37,6 +43,7 @@ typedef struct {
     int         fps;            
     int         bitrate_kbps;   
     int         encoder_type;   
+    int         codec_type;
 } NessMuxerConfig;
 
 

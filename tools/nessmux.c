@@ -10,7 +10,7 @@ static void print_usage(void)
     printf("NessMuxer CLI - Raw NV12 to MKV converter\n");
     printf("\n");
     printf("Usage:\n");
-    printf("  nessmux <input.raw> <output.mkv> --width <w> --height <h> --fps <fps> --bitrate <kbps> [--encoder auto|mf|x264|nvenc]\n");
+    printf("  nessmux <input.raw> <output.mkv> --width <w> --height <h> --fps <fps> --bitrate <kbps> [--encoder auto|mf|x264|nvenc|n148] [--codec avc|n148]\n");
     printf("\n");
     printf("Example:\n");
     printf("  nessmux test_input.raw test_output.mkv --width 320 --height 240 --fps 30 --bitrate 1000 --encoder auto\n");
@@ -60,6 +60,10 @@ static int parse_encoder_arg(const char* value, int* out_encoder_type)
         *out_encoder_type = NESS_ENCODER_VIDEOTOOLBOX;
         return 1;
     }
+    if (strcmp(value, "n148") == 0) {
+        *out_encoder_type = NESS_ENCODER_N148;
+        return 1;
+    }
 
     return 0;
 }
@@ -95,6 +99,7 @@ int main(int argc, char** argv)
     int fps = 0;
     int bitrate_kbps = 0;
     int encoder_type = NESS_ENCODER_AUTO;
+    int codec_type = NESS_CODEC_AVC;
     int frame_size;
     uint8_t* frame_buf = NULL;
     FILE* input = NULL;
@@ -151,8 +156,21 @@ int main(int argc, char** argv)
                 return 1;
             }
             i++;
-        }
-        else {
+        }else if (strcmp(argv[i], "--codec") == 0) {
+            if (i + 1 >= argc) {
+                printf("ERROR: missing value for --codec\n");
+                return 1;
+            }
+            i++;
+            if (strcmp(argv[i], "avc") == 0 || strcmp(argv[i], "h264") == 0) {
+                codec_type = NESS_CODEC_AVC;
+            } else if (strcmp(argv[i], "n148") == 0) {
+                codec_type = NESS_CODEC_N148;
+            } else {
+                printf("ERROR: invalid value for --codec: %s (use avc or n148)\n", argv[i]);
+                return 1;
+            }
+        }else {
             printf("ERROR: unknown argument: %s\n", argv[i]);
             print_usage();
             return 1;
@@ -211,6 +229,7 @@ int main(int argc, char** argv)
     config.fps = fps;
     config.bitrate_kbps = bitrate_kbps;
     config.encoder_type = encoder_type;
+    config.codec_type = codec_type;
 
     printf("NessMuxer CLI - starting conversion\n");
     printf("  Input:        %s\n", input_path);
@@ -221,7 +240,10 @@ int main(int argc, char** argv)
     printf("  Encoder:      %s\n",
            (encoder_type == NESS_ENCODER_MEDIA_FOUNDATION) ? "mf" :
            (encoder_type == NESS_ENCODER_X264) ? "x264" :
-           (encoder_type == NESS_ENCODER_NVENC) ? "nvenc" : "auto");
+           (encoder_type == NESS_ENCODER_NVENC) ? "nvenc" :
+           (encoder_type == NESS_ENCODER_N148) ? "n148" : "auto");
+    printf("  Codec:        %s\n",
+           (codec_type == NESS_CODEC_N148) ? "N.148" : "AVC/H.264");
     printf("  Frame size:   %d bytes\n", frame_size);
     printf("  Total frames: %lld\n", total_frames_expected);
     printf("\n");

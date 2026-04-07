@@ -21,8 +21,9 @@ extern const NessEncoderVtable g_vtbox_encoder_vtable;
 extern const NessEncoderVtable g_v4l2_encoder_vtable;
 #endif
 
-
-
+#ifdef NESS_HAVE_N148
+extern const NessEncoderVtable g_n148_encoder_vtable;
+#endif
 
 static int encoder_probe(const NessEncoderVtable* vt)
 {
@@ -71,9 +72,16 @@ const NessEncoderVtable* ness_encoder_get(NessEncoderType type)
             return NULL;
 #endif
 
-        case NESS_ENCODER_V4L2:
+case NESS_ENCODER_V4L2:
 #ifdef NESS_HAVE_V4L2
             return &g_v4l2_encoder_vtable;
+#else
+            return NULL;
+#endif
+
+        case NESS_ENCODER_N148:
+#ifdef NESS_HAVE_N148
+            return &g_n148_encoder_vtable;
 #else
             return NULL;
 #endif

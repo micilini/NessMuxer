@@ -579,12 +579,10 @@ static void vtbox_destroy(void* ctx)
     free(e);
 }
 
-
-
-
-
 const NessEncoderVtable g_vtbox_encoder_vtable = {
     "VideoToolbox",
+    "V_MPEG4/ISO/AVC",
+    1,
     vtbox_create,
     vtbox_submit_frame,
     vtbox_receive_packets,
@@ -595,10 +593,10 @@ const NessEncoderVtable g_vtbox_encoder_vtable = {
 
 #else
 
-
-
 const NessEncoderVtable g_vtbox_encoder_vtable = {
     "VideoToolbox",
+    "V_MPEG4/ISO/AVC",
+    1,
     NULL,
     NULL,
     NULL,

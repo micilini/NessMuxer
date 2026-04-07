@@ -9,6 +9,7 @@ set(CMAKE_C_STANDARD 11)
 
 option(NESS_USE_X264  "Enable libx264 software encoder backend"  OFF)
 option(NESS_USE_NVENC "Enable NVIDIA NVENC hardware encoder backend" OFF)
+option(NESS_USE_N148 "Enable N.148 autoral codec" OFF)
 
 # Paths so necessarios no Windows (Linux/macOS usam pkg-config / frameworks)
 set(NESS_X264_INCLUDE_DIR  "" CACHE PATH "Path to x264 headers (Windows only)")
@@ -196,6 +197,16 @@ if(NESS_USE_NVENC)
         ${NESS_NVENC_INCLUDE_DIR}
     )
     target_compile_definitions(test_full_pipeline PRIVATE NESS_HAVE_NVENC)
+endif()
+
+# ---------------------------------------------------------------------------
+# Optional: N.148 codec
+# ---------------------------------------------------------------------------
+
+if(NESS_USE_N148)
+    target_compile_definitions(NessMuxer PRIVATE NESS_HAVE_N148)
+    target_compile_definitions(test_full_pipeline PRIVATE NESS_HAVE_N148)
+    # Fonte files do N.148 serao adicionados aqui nas proximas fases
 endif()
 
 # ===========================================================================

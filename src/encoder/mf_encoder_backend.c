@@ -66,6 +66,8 @@ static void mf_destroy_wrapper(void* ctx)
 
 const NessEncoderVtable g_mf_encoder_vtable = {
     "MediaFoundation",
+    "V_MPEG4/ISO/AVC",
+    1,
     mf_create_wrapper,
     mf_submit_frame_wrapper,
     mf_receive_packets_wrapper,

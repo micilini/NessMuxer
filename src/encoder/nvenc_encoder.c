@@ -594,6 +594,8 @@ static void nvenc_destroy(void* ctx)
 
 const NessEncoderVtable g_nvenc_encoder_vtable = {
     "NVENC",
+    "V_MPEG4/ISO/AVC",
+    1,
     nvenc_create,
     nvenc_submit_frame,
     nvenc_receive_packets,
@@ -606,6 +608,8 @@ const NessEncoderVtable g_nvenc_encoder_vtable = {
 
 const NessEncoderVtable g_nvenc_encoder_vtable = {
     "NVENC",
+    "V_MPEG4/ISO/AVC",
+    1,
     NULL,
     NULL,
     NULL,

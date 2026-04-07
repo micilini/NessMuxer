@@ -30,6 +30,10 @@ typedef struct
     int avcc_profile;
     int avcc_level;
 
+    int n148_version;
+    int n148_profile;
+    int n148_entropy;
+
     int cluster_count;
     int block_count;
     int keyframe_count;
@@ -340,22 +344,41 @@ static int parse_track_entry(NessIO* io, int64_t end_pos, ValidatorStats* st)
                 return -1;
         }
         else if (id == MATROSKA_ID_CODECPRIVATE) {
-            unsigned char header[4];
+            unsigned char header[16];
 
             st->codec_private_size = (int)size;
-            if (size >= 4) {
-                if (nio_read(io, header, 4) != 0)
-                    return -1;
 
-                st->avcc_version = header[0];
-                st->avcc_profile = header[1];
-                st->avcc_level = header[3];
-
-                if (size > 4 && skip_bytes(io, size - 4) != 0)
-                    return -1;
+            if (strcmp(st->codec_id, "V_NESS/N148") == 0) {
+                if (size >= 16) {
+                    if (nio_read(io, header, 16) != 0)
+                        return -1;
+                    if (header[0] == 0x4E && header[1] == 0x31 &&
+                        header[2] == 0x34 && header[3] == 0x38) {
+                        st->n148_version = header[4];
+                        st->n148_profile = header[5];
+                        st->n148_entropy = header[15];
+                    }
+                    if (size > 16 && skip_bytes(io, size - 16) != 0)
+                        return -1;
+                } else {
+                    if (skip_bytes(io, size) != 0)
+                        return -1;
+                }
             } else {
-                if (skip_bytes(io, size) != 0)
-                    return -1;
+                if (size >= 4) {
+                    if (nio_read(io, header, 4) != 0)
+                        return -1;
+
+                    st->avcc_version = header[0];
+                    st->avcc_profile = header[1];
+                    st->avcc_level = header[3];
+
+                    if (size > 4 && skip_bytes(io, size - 4) != 0)
+                        return -1;
+                } else {
+                    if (skip_bytes(io, size) != 0)
+                        return -1;
+                }
             }
         }
         else if (id == MATROSKA_ID_TRACKVIDEO) {
@@ -713,11 +736,21 @@ static int validate_file(const char* path)
            st.codec_id[0] ? st.codec_id : "(unknown)",
            st.video_width,
            st.video_height);
-    printf("     CodecPrivate: %d bytes (AVCC v%d, profile=%d, level=%d)\n",
-           st.codec_private_size,
-           st.avcc_version,
-           st.avcc_profile,
-           st.avcc_level);
+    if (strcmp(st.codec_id, "V_NESS/N148") == 0) {
+        printf("     CodecPrivate: %d bytes (N.148 v%d, profile=%s, entropy=%s)\n",
+               st.codec_private_size,
+               st.n148_version,
+               (st.n148_profile == 1) ? "Main" :
+               (st.n148_profile == 2) ? "Epic" : "unknown",
+               (st.n148_entropy == 1) ? "CAVLC" :
+               (st.n148_entropy == 2) ? "CABAC" : "unknown");
+    } else {
+        printf("     CodecPrivate: %d bytes (AVCC v%d, profile=%d, level=%d)\n",
+               st.codec_private_size,
+               st.avcc_version,
+               st.avcc_profile,
+               st.avcc_level);
+    }
     printf("[OK] Clusters: %d clusters, %d SimpleBlocks\n",
            st.cluster_count,
            st.block_count);
