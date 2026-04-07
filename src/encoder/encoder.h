@@ -16,6 +16,8 @@ typedef int (*ness_packet_callback)(void* userdata, const NessEncodedPacket* pkt
 
 typedef struct NessEncoderVtable {
     const char* name;
+    const char* codec_id;
+    int         needs_annexb_conversion;
     int  (*create)(void** ctx, int width, int height, int fps, int bitrate_kbps);
     int  (*submit_frame)(void* ctx, const uint8_t* nv12, int nv12_size);
     int  (*receive_packets)(void* ctx, ness_packet_callback cb, void* userdata);

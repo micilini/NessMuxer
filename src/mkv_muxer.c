@@ -50,6 +50,9 @@ struct MkvMuxer {
     uint8_t*    convert_buf;
     int         convert_buf_size;
 
+    int         needs_annexb_conv;
+    char        codec_id[64];
+
     char        error[256];
 };
 
@@ -119,7 +122,7 @@ static void write_tracks(MkvMuxer* mux)
     ebml_put_uint(mux->io, MATROSKA_ID_TRACKTYPE, MATROSKA_TRACK_TYPE_VIDEO);
     ebml_put_uint(mux->io, MATROSKA_ID_FLAGLACING, 0);
     ebml_put_uint(mux->io, MATROSKA_ID_TRACKDEFAULTDURATION, (uint64_t)default_duration_ns);
-    ebml_put_string(mux->io, MATROSKA_ID_CODECID, "V_MPEG4/ISO/AVC");
+    ebml_put_string(mux->io, MATROSKA_ID_CODECID, mux->codec_id);
     ebml_put_binary(mux->io, MATROSKA_ID_CODECPRIVATE,
                     mux->codec_private, mux->codec_private_size);
 
@@ -154,35 +157,41 @@ static void open_cluster(MkvMuxer* mux, int64_t pts_ms)
     mux->cluster_open = 1;
 }
 
-int mkv_muxer_open(MkvMuxer** out_mux, const char* path,
-                    int width, int height, int fps, int bitrate_kbps,
-                    const uint8_t* codec_private, int codec_private_size)
+
+int mkv_muxer_open_desc(MkvMuxer** out_mux, const char* path,
+                        const NessVideoTrackDesc* desc)
 {
     MkvMuxer* mux;
 
     *out_mux = NULL;
 
-    if (!path || width <= 0 || height <= 0 || fps <= 0)
+    if (!path || !desc || desc->width <= 0 || desc->height <= 0 || desc->fps <= 0)
         return -1;
-    if (!codec_private || codec_private_size <= 0)
+    if (!desc->codec_private || desc->codec_private_size <= 0)
+        return -1;
+    if (!desc->codec_id || desc->codec_id[0] == '\0')
         return -1;
 
     mux = (MkvMuxer*)calloc(1, sizeof(MkvMuxer));
     if (!mux) return -1;
 
-    mux->width = width;
-    mux->height = height;
-    mux->fps = fps;
-    mux->bitrate_kbps = bitrate_kbps;
+    mux->width = desc->width;
+    mux->height = desc->height;
+    mux->fps = desc->fps;
+    mux->bitrate_kbps = desc->bitrate_kbps;
     mux->cluster_open = 0;
     mux->last_pts_ms = 0;
+    mux->needs_annexb_conv = desc->needs_annexb_conv;
 
-    mux->codec_private = (uint8_t*)malloc(codec_private_size);
+    strncpy(mux->codec_id, desc->codec_id, sizeof(mux->codec_id) - 1);
+    mux->codec_id[sizeof(mux->codec_id) - 1] = '\0';
+
+    mux->codec_private = (uint8_t*)malloc(desc->codec_private_size);
     if (!mux->codec_private) { free(mux); return -1; }
-    memcpy(mux->codec_private, codec_private, codec_private_size);
-    mux->codec_private_size = codec_private_size;
+    memcpy(mux->codec_private, desc->codec_private, desc->codec_private_size);
+    mux->codec_private_size = desc->codec_private_size;
 
-    mux->convert_buf_size = width * height * 2;
+    mux->convert_buf_size = desc->width * desc->height * 2;
     mux->convert_buf = (uint8_t*)malloc(mux->convert_buf_size);
     if (!mux->convert_buf) { free(mux->codec_private); free(mux); return -1; }
 
@@ -211,6 +220,23 @@ int mkv_muxer_open(MkvMuxer** out_mux, const char* path,
     return 0;
 }
 
+int mkv_muxer_open(MkvMuxer** out_mux, const char* path,
+                    int width, int height, int fps, int bitrate_kbps,
+                    const uint8_t* codec_private, int codec_private_size)
+{
+    NessVideoTrackDesc desc;
+    memset(&desc, 0, sizeof(desc));
+    desc.codec_id = "V_MPEG4/ISO/AVC";
+    desc.codec_private = codec_private;
+    desc.codec_private_size = codec_private_size;
+    desc.width = width;
+    desc.height = height;
+    desc.fps = fps;
+    desc.bitrate_kbps = bitrate_kbps;
+    desc.needs_annexb_conv = 1;
+    return mkv_muxer_open_desc(out_mux, path, &desc);
+}
+
 int mkv_muxer_write_packet(MkvMuxer* mux, const MkvPacket* pkt)
 {
     int64_t pts_ms;
@@ -234,16 +260,22 @@ int mkv_muxer_write_packet(MkvMuxer* mux, const MkvPacket* pkt)
             add_cue(mux, pts_ms, mux->cluster_pos);
     }
 
-    if (avc_annexb_to_mp4(pkt->data, pkt->size,
-                           mux->convert_buf, mux->convert_buf_size,
-                           &mp4_size) != 0 || mp4_size <= 0) {
-        set_error(mux, "avc_annexb_to_mp4 failed");
-        return -1;
+    if (mux->needs_annexb_conv) {
+        if (avc_annexb_to_mp4(pkt->data, pkt->size,
+                               mux->convert_buf, mux->convert_buf_size,
+                               &mp4_size) != 0 || mp4_size <= 0) {
+            set_error(mux, "avc_annexb_to_mp4 failed");
+            return -1;
+        }
     }
 
     rel_ts = (int16_t)(pts_ms - mux->cluster_pts_ms);
 
-    block_data_size = 1 + 2 + 1 + mp4_size;
+    if (mux->needs_annexb_conv) {
+        block_data_size = 1 + 2 + 1 + mp4_size;
+    } else {
+        block_data_size = 1 + 2 + 1 + pkt->size;
+    }
 
     ebml_put_id(mux->io, MATROSKA_ID_SIMPLEBLOCK);
     ebml_put_size(mux->io, (uint64_t)block_data_size, 0);
@@ -251,7 +283,12 @@ int mkv_muxer_write_packet(MkvMuxer* mux, const MkvPacket* pkt)
     nio_w8(mux->io, 0x81);
     nio_wb16(mux->io, (uint16_t)rel_ts);
     nio_w8(mux->io, pkt->is_keyframe ? 0x80 : 0x00);
-    nio_write(mux->io, mux->convert_buf, mp4_size);
+
+    if (mux->needs_annexb_conv) {
+        nio_write(mux->io, mux->convert_buf, mp4_size);
+    } else {
+        nio_write(mux->io, pkt->data, pkt->size);
+    }
 
     mux->cluster_block_count++;
     mux->frame_count++;

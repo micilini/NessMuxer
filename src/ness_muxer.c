@@ -1,7 +1,6 @@
 #include "../include/ness_muxer.h"
 #include "encoder/encoder.h"
 #include "mkv_muxer.h"
-#include "avc_utils.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -49,16 +48,24 @@ static int on_encoded_packet(void* userdata, const NessEncodedPacket* pkt)
             return -1;
         }
 
-        if (mkv_muxer_open(&m->muxer,
-                           m->output_path,
-                           m->width,
-                           m->height,
-                           m->fps,
-                           m->bitrate_kbps,
-                           cp,
-                           cp_size) != 0) {
-            set_error(m, "mkv_muxer_open failed");
-            return -1;
+        {
+            NessVideoTrackDesc desc;
+            memset(&desc, 0, sizeof(desc));
+            desc.codec_id = m->encoder_vtable->codec_id
+                            ? m->encoder_vtable->codec_id
+                            : "V_MPEG4/ISO/AVC";
+            desc.codec_private = cp;
+            desc.codec_private_size = cp_size;
+            desc.width = m->width;
+            desc.height = m->height;
+            desc.fps = m->fps;
+            desc.bitrate_kbps = m->bitrate_kbps;
+            desc.needs_annexb_conv = m->encoder_vtable->needs_annexb_conversion;
+
+            if (mkv_muxer_open_desc(&m->muxer, m->output_path, &desc) != 0) {
+                set_error(m, "mkv_muxer_open failed");
+                return -1;
+            }
         }
 
         m->muxer_opened = 1;
@@ -118,6 +125,10 @@ NESS_API int ness_muxer_open(NessMuxer** out_muxer, const NessMuxerConfig* confi
     m->config.output_path = m->output_path;
 
     enc_type = (NessEncoderType)config->encoder_type;
+
+    if (config->codec_type == NESS_CODEC_N148)
+        enc_type = NESS_ENCODER_N148;
+
     if (enc_type == NESS_ENCODER_AUTO)
         m->encoder_vtable = ness_encoder_get_best();
     else

@@ -573,6 +573,8 @@ static void x264_destroy(void* ctx)
 
 const NessEncoderVtable g_x264_encoder_vtable = {
     "x264",
+    "V_MPEG4/ISO/AVC",
+    1,
     x264_create,
     x264_submit_frame,
     x264_receive_packets,
@@ -585,6 +587,8 @@ const NessEncoderVtable g_x264_encoder_vtable = {
 
 const NessEncoderVtable g_x264_encoder_vtable = {
     "x264",
+    "V_MPEG4/ISO/AVC",
+    1,
     NULL,
     NULL,
     NULL,

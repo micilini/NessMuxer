@@ -23,7 +23,7 @@ static void print_usage(void)
     printf("NessMuxer Encoder Benchmark\n");
     printf("\n");
     printf("Usage:\n");
-    printf("  nessmux_bench [--encoder auto|mf|x264|nvenc]\n");
+    printf("  nessmux_bench [--encoder auto|mf|x264|nvenc|n148]\n");
     printf("  nessmux_bench --width <w> --height <h> --frames <n> [--encoder auto|mf|x264|nvenc]\n");
     printf("\n");
 }
@@ -69,6 +69,10 @@ static int parse_encoder_arg(const char* value, int* out_encoder_type)
     }
     if (strcmp(value, "videotoolbox") == 0 || strcmp(value, "vt") == 0) {
         *out_encoder_type = NESS_ENCODER_VIDEOTOOLBOX;
+        return 1;
+    }
+    if (strcmp(value, "n148") == 0) {
+        *out_encoder_type = NESS_ENCODER_N148;
         return 1;
     }
 
@@ -178,6 +182,7 @@ static int run_single_bench(int width, int height, int fps, int bitrate_kbps, in
     config.fps = fps;
     config.bitrate_kbps = bitrate_kbps;
     config.encoder_type = encoder_type;
+    config.codec_type = (encoder_type == NESS_ENCODER_N148) ? NESS_CODEC_N148 : NESS_CODEC_AVC;
 
     if (ness_muxer_open(&muxer, &config) != NESS_OK) {
         printf("ERROR: ness_muxer_open failed for %s\n", output_name);
@@ -289,7 +294,8 @@ int main(int argc, char** argv)
     printf("Backend: %s\n",
            (encoder_type == NESS_ENCODER_MEDIA_FOUNDATION) ? "mf" :
            (encoder_type == NESS_ENCODER_X264) ? "x264" :
-           (encoder_type == NESS_ENCODER_NVENC) ? "nvenc" : "auto");
+           (encoder_type == NESS_ENCODER_NVENC) ? "nvenc" :
+           (encoder_type == NESS_ENCODER_N148) ? "n148" : "auto");
     printf("%-18s %-8s %-10s %-8s %-14s %s\n",
            "Resolution", "Frames", "Time(ms)", "FPS", "Bitrate", "File Size");
 
