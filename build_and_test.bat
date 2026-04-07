@@ -120,6 +120,7 @@ if exist "%RELEASE_DIR%\nessmux.exe"         (echo   [OK] nessmux.exe)         e
 if exist "%RELEASE_DIR%\nessmux_validate.exe" (echo   [OK] nessmux_validate.exe) else (echo   [MISSING] nessmux_validate.exe)
 if exist "%RELEASE_DIR%\nessmux_bench.exe"   (echo   [OK] nessmux_bench.exe)   else (echo   [MISSING] nessmux_bench.exe)
 if exist "%RELEASE_DIR%\test_n148_codec.exe" (echo   [OK] test_n148_codec.exe) else (echo   [INFO] test_n148_codec.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_mux.exe"   (echo   [OK] test_n148_mux.exe)   else (echo   [INFO] test_n148_mux.exe - optional)
 echo.
 
 :: =========================================================================
@@ -197,6 +198,28 @@ if %errorlevel% equ 0 (
 )
 echo.
 
+echo --- test_n148_mux ---
+"%RELEASE_DIR%\test_n148_mux.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_mux
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_mux
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+if exist "test_n148_mux.mkv" (
+    echo --- nessmux_validate test_n148_mux.mkv ---
+    "%RELEASE_DIR%\nessmux_validate.exe" "test_n148_mux.mkv"
+    if %errorlevel% equ 0 (
+        echo [PASS] validate test_n148_mux.mkv
+    ) else (
+        echo [FAIL] validate test_n148_mux.mkv
+    )
+    echo.
+)
+
 echo ===================================================================
 echo  Unit Tests: %PASS_COUNT% passed, %FAIL_COUNT% failed
 echo ===================================================================
@@ -257,33 +280,33 @@ echo.
 
 :: --- CLI Test: nessmux com encoder x264 (se compilado) ---
 if "%USE_X264%"=="ON" (
-    echo --- nessmux (encoder: x264) ---
+    echo --- nessmux [encoder=x264] ---
     set "OUT_X264=%TEST_OUTPUT_DIR%\screen_x264.mkv"
     "%RELEASE_DIR%\nessmux.exe" "%RAW_FILE%" "!OUT_X264!" --width %WIDTH% --height %HEIGHT% --fps %FPS% --bitrate %BITRATE% --encoder x264
     if !errorlevel! equ 0 (
         echo [PASS] nessmux x264
     ) else (
-        echo [FAIL] nessmux x264 (exit code: !errorlevel!)
+        echo [FAIL] nessmux x264 [exit code: !errorlevel!]
     )
     echo.
 ) else (
-    echo [SKIP] nessmux x264 (not compiled with NESS_USE_X264)
+    echo [SKIP] nessmux x264 [not compiled with NESS_USE_X264]
     echo.
 )
 
 :: --- CLI Test: nessmux com encoder nvenc (se compilado) ---
 if "%USE_NVENC%"=="ON" (
-    echo --- nessmux (encoder: nvenc) ---
+    echo --- nessmux [encoder=nvenc] ---
     set "OUT_NVENC=%TEST_OUTPUT_DIR%\screen_nvenc.mkv"
     "%RELEASE_DIR%\nessmux.exe" "%RAW_FILE%" "!OUT_NVENC!" --width %WIDTH% --height %HEIGHT% --fps %FPS% --bitrate %BITRATE% --encoder nvenc
     if !errorlevel! equ 0 (
         echo [PASS] nessmux nvenc
     ) else (
-        echo [FAIL] nessmux nvenc (exit code: !errorlevel!)
+        echo [FAIL] nessmux nvenc [exit code: !errorlevel!]
     )
     echo.
 ) else (
-    echo [SKIP] nessmux nvenc (not compiled with NESS_USE_NVENC)
+    echo [SKIP] nessmux nvenc [not compiled with NESS_USE_NVENC]
     echo.
 )
 
@@ -331,13 +354,13 @@ echo --- Benchmark (encoder: auto) ---
 echo.
 
 if "%USE_X264%"=="ON" (
-    echo --- Benchmark (encoder: x264) ---
+    echo --- Benchmark [encoder=x264] ---
     "%RELEASE_DIR%\nessmux_bench.exe" --encoder x264
     echo.
 )
 
 if "%USE_NVENC%"=="ON" (
-    echo --- Benchmark (encoder: nvenc) ---
+    echo --- Benchmark [encoder=nvenc] ---
     "%RELEASE_DIR%\nessmux_bench.exe" --encoder nvenc
     echo.
 )

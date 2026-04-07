@@ -231,6 +231,19 @@ add_executable(test_n148_codec
 )
 target_include_directories(test_n148_codec PRIVATE src)
 
+add_executable(test_n148_mux
+    test/test_n148_mux.c
+    src/mkv_muxer.c
+    src/ebml_writer.c
+    src/buffered_io.c
+    src/avc_utils.c
+    src/codec/n148/n148_codec.c
+    src/codec/n148/n148_bitstream.c
+    src/codec/n148/n148_codec_private.c
+    src/decoder/n148/n148_parser.c
+)
+target_include_directories(test_n148_mux PRIVATE src)
+
 # ===========================================================================
 # CLI Tools
 # ===========================================================================
@@ -244,6 +257,7 @@ target_link_libraries(nessmux PRIVATE NessMuxer)
 add_executable(nessmux_validate
     tools/nessmux_validate.c
     src/buffered_io.c
+    src/codec/n148/n148_codec_private.c
 )
 target_include_directories(nessmux_validate PRIVATE src)
 
