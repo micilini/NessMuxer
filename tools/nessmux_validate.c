@@ -5,6 +5,7 @@
 
 #include "buffered_io.h"
 #include "mkv_defs.h"
+#include "codec/n148/n148_codec_private.h"
 
 typedef struct
 {
@@ -348,22 +349,26 @@ static int parse_track_entry(NessIO* io, int64_t end_pos, ValidatorStats* st)
 
             st->codec_private_size = (int)size;
 
-            if (strcmp(st->codec_id, "V_NESS/N148") == 0) {
-                if (size >= 16) {
-                    if (nio_read(io, header, 16) != 0)
-                        return -1;
-                    if (header[0] == 0x4E && header[1] == 0x31 &&
-                        header[2] == 0x34 && header[3] == 0x38) {
-                        st->n148_version = header[4];
-                        st->n148_profile = header[5];
-                        st->n148_entropy = header[15];
-                    }
-                    if (size > 16 && skip_bytes(io, size - 16) != 0)
-                        return -1;
-                } else {
-                    if (skip_bytes(io, size) != 0)
-                        return -1;
+                        if (strcmp(st->codec_id, "V_NESS/N148") == 0) {
+                uint8_t* cp_buf = NULL;
+                N148SeqHeader seq_hdr;
+
+                cp_buf = (uint8_t*)malloc((size_t)size);
+                if (!cp_buf)
+                    return -1;
+
+                if (nio_read(io, cp_buf, (size_t)size) != 0) {
+                    free(cp_buf);
+                    return -1;
                 }
+
+                if (n148_seq_header_parse(cp_buf, (int)size, &seq_hdr) == 0) {
+                    st->n148_version = seq_hdr.version;
+                    st->n148_profile = seq_hdr.profile;
+                    st->n148_entropy = seq_hdr.entropy_mode;
+                }
+
+                free(cp_buf);
             } else {
                 if (size >= 4) {
                     if (nio_read(io, header, 4) != 0)
