@@ -8,6 +8,8 @@
 #include "../../codec/n148/n148_codec_private.h"
 #include "../../codec/n148/n148_codec.h"
 #include "../../codec/n148/n148_bitstream.h"
+#include "../../common/entropy/n148_cavlc.h"
+#include "../../common/entropy/n148_cabac.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -84,7 +86,8 @@ static int reconstruct_inter_or_intra_block(N148BsReader* bs,
                                             int bx, int by,
                                             int sample_stride, int sample_offset,
                                             int qp,
-                                            int block_mode)
+                                            int block_mode,
+                                            int entropy_mode)
 {
     uint8_t pred[16];
     uint8_t recon_u8[16];
@@ -144,10 +147,13 @@ static int reconstruct_inter_or_intra_block(N148BsReader* bs,
 
         if (n148_bs_read_ue(bs, &ref_idx) != 0)
             return -1;
-        if (n148_bs_read_se(bs, &mvx_q4) != 0)
-            return -1;
-        if (n148_bs_read_se(bs, &mvy_q4) != 0)
-            return -1;
+        if (entropy_mode == N148_ENTROPY_CABAC) {
+            if (n148_cabac_read_mv(bs, &mvx_q4, &mvy_q4) != 0)
+                return -1;
+        } else {
+            if (n148_entropy_cavlc_read_mv(bs, &mvx_q4, &mvy_q4) != 0)
+                return -1;
+        }
 
         n148_mc_copy_qpel_4x4(dst_plane, stride,
                               ref_plane, stride,
@@ -178,21 +184,17 @@ static int reconstruct_inter_or_intra_block(N148BsReader* bs,
 
     {
         int32_t qp_delta = 0;
-        uint32_t coeff_count = 0;
+        int coeff_count = 0;
 
         if (n148_bs_read_se(bs, &qp_delta) != 0)
             return -1;
-        if (n148_bs_read_ue(bs, &coeff_count) != 0)
-            return -1;
 
-        if (coeff_count > 16)
-            return -1;
-
-        for (i = 0; i < (int)coeff_count; i++) {
-            int32_t level = 0;
-            if (n148_bs_read_se(bs, &level) != 0)
+        if (entropy_mode == N148_ENTROPY_CABAC) {
+            if (n148_cabac_read_block(bs, qzigzag, &coeff_count, 16) != 0)
                 return -1;
-            qzigzag[i] = (int16_t)level;
+        } else {
+            if (n148_entropy_cavlc_read_block(bs, qzigzag, &coeff_count, 16) != 0)
+                return -1;
         }
     }
 
@@ -404,7 +406,8 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
                                         bx, by,
                                         1, 0,
                                         frm_hdr.qp_base,
-                                        (int)block_mode) != 0)
+                                        (int)block_mode,
+                                        dec->seq_hdr.entropy_mode) != 0)
                                     goto fail;
                             } else {
                                 if (reconstruct_inter_or_intra_block(
@@ -416,7 +419,8 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
                                         bx, by,
                                         1, 0,
                                         frm_hdr.qp_base,
-                                        (int)block_mode) != 0)
+                                        (int)block_mode,
+                                        dec->seq_hdr.entropy_mode) != 0)
                                     goto fail;
                             }
                         }
@@ -464,7 +468,8 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
                                             bx, by,
                                             2, ch,
                                             frm_hdr.qp_base,
-                                            (int)block_mode) != 0)
+                                            (int)block_mode,
+                                            dec->seq_hdr.entropy_mode) != 0)
                                         goto fail;
                                 } else {
                                     if (reconstruct_inter_or_intra_block(
@@ -476,7 +481,8 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
                                             bx, by,
                                             2, ch,
                                             frm_hdr.qp_base,
-                                            (int)block_mode) != 0)
+                                            (int)block_mode,
+                                            dec->seq_hdr.entropy_mode) != 0)
                                         goto fail;
                                 }
                             }

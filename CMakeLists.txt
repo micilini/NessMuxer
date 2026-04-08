@@ -219,6 +219,9 @@ if(NESS_USE_N148)
         src/common/motion_search.c
         src/common/interpolation.c
         src/common/motion_search_qpel.c
+        src/common/entropy/n148_binarization.c
+        src/common/entropy/n148_cavlc.c
+        src/common/entropy/n148_cabac.c
         src/encoder/n148/n148_encoder.c
         src/encoder/n148/n148_intra.c
         src/encoder/n148/n148_inter.c
@@ -238,6 +241,9 @@ if(NESS_USE_N148)
         src/common/motion_search.c
         src/common/interpolation.c
         src/common/motion_search_qpel.c
+        src/common/entropy/n148_binarization.c
+        src/common/entropy/n148_cavlc.c
+        src/common/entropy/n148_cabac.c
         src/encoder/n148/n148_encoder.c
         src/encoder/n148/n148_intra.c
         src/encoder/n148/n148_inter.c
@@ -260,6 +266,9 @@ add_executable(test_n148_codec
     src/decoder/n148/n148_motion.c
     src/decoder/n148/n148_dpb.c
     src/common/interpolation.c
+    src/common/entropy/n148_binarization.c
+    src/common/entropy/n148_cavlc.c
+    src/common/entropy/n148_cabac.c
     src/encoder/n148/n148_quant.c
 )
 target_include_directories(test_n148_codec PRIVATE src)
@@ -290,6 +299,9 @@ add_executable(test_n148_encoder
     src/common/motion_search.c
     src/common/interpolation.c
     src/common/motion_search_qpel.c
+    src/common/entropy/n148_binarization.c
+    src/common/entropy/n148_cavlc.c
+    src/common/entropy/n148_cabac.c
     src/encoder/n148/n148_encoder.c
     src/encoder/n148/n148_intra.c
     src/encoder/n148/n148_inter.c
@@ -314,6 +326,9 @@ add_executable(test_n148_roundtrip
     src/common/motion_search.c
     src/common/interpolation.c
     src/common/motion_search_qpel.c
+    src/common/entropy/n148_binarization.c
+    src/common/entropy/n148_cavlc.c
+    src/common/entropy/n148_cabac.c
     src/encoder/n148/n148_encoder.c
     src/encoder/n148/n148_intra.c
     src/encoder/n148/n148_inter.c
@@ -342,6 +357,33 @@ add_executable(test_n148_gop_planner
     src/encoder/n148/n148_reorder.c
 )
 target_include_directories(test_n148_gop_planner PRIVATE src)
+
+add_executable(test_n148_cabac
+    test/test_n148_cabac.c
+    src/codec/n148/n148_bitstream.c
+    src/codec/n148/n148_codec_private.c
+    src/codec/n148/n148_codec.c
+    src/decoder/n148/n148_decoder.c
+    src/decoder/n148/n148_parser.c
+    src/decoder/n148/n148_frame_recon.c
+    src/decoder/n148/n148_motion.c
+    src/decoder/n148/n148_dpb.c
+    src/common/interpolation.c
+    src/common/motion_search.c
+    src/common/motion_search_qpel.c
+    src/common/entropy/n148_binarization.c
+    src/common/entropy/n148_cavlc.c
+    src/common/entropy/n148_cabac.c
+    src/encoder/n148/n148_encoder.c
+    src/encoder/n148/n148_intra.c
+    src/encoder/n148/n148_inter.c
+    src/encoder/n148/n148_transform.c
+    src/encoder/n148/n148_quant.c
+    src/encoder/n148/n148_entropy_enc_cavlc.c
+    src/encoder/n148/n148_ratecontrol_basic.c
+    src/encoder/n148/n148_reorder.c
+)
+target_include_directories(test_n148_cabac PRIVATE src src/common/entropy src/codec/n148 src/decoder/n148 src/encoder/n148)
 
 # ===========================================================================
 # CLI Tools

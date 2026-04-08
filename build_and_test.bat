@@ -127,6 +127,7 @@ if exist "%RELEASE_DIR%\test_n148_roundtrip.exe"     (echo   [OK] test_n148_roun
 if exist "%RELEASE_DIR%\test_n148_interpolation.exe" (echo   [OK] test_n148_interpolation.exe) else (echo   [INFO] test_n148_interpolation.exe - optional)
 if exist "%RELEASE_DIR%\test_n148_reorder.exe"       (echo   [OK] test_n148_reorder.exe)       else (echo   [INFO] test_n148_reorder.exe - optional)
 if exist "%RELEASE_DIR%\test_n148_gop_planner.exe"   (echo   [OK] test_n148_gop_planner.exe)   else (echo   [INFO] test_n148_gop_planner.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_cabac.exe"         (echo   [OK] test_n148_cabac.exe)         else (echo   [INFO] test_n148_cabac.exe - optional)
 echo.
 
 :: =========================================================================
@@ -270,13 +271,26 @@ if %errorlevel% equ 0 (
 )
 echo.
 
+echo --- test_n148_cabac ---
+"%RELEASE_DIR%\test_n148_cabac.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_cabac
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_cabac
+    set /a FAIL_COUNT+=1
+)
+echo.
+
 if exist "test_n148_mux.mkv" (
     echo --- nessmux_validate test_n148_mux.mkv ---
-    "%RELEASE_DIR%\nessmux_validate.exe" "test_n148_mux.mkv"
-    if %errorlevel% equ 0 (
+    build\Release\nessmux_validate.exe test_n148_mux.mkv
+    if !errorlevel! equ 0 (
         echo [PASS] validate test_n148_mux.mkv
+        set /a PASS_COUNT+=1
     ) else (
         echo [FAIL] validate test_n148_mux.mkv
+        set /a FAIL_COUNT+=1
     )
     echo.
 )
