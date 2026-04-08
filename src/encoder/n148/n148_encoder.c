@@ -19,6 +19,10 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+
+#define N148_ENC_LOG(fmt, ...) \
+    fprintf(stderr, "[N148 ENC] " fmt "\n", ##__VA_ARGS__)
 
 typedef struct {
     int width;
@@ -243,6 +247,7 @@ static void push_reference_frame(N148EncoderCtx* ctx,
 }
 
 static int encode_one_block(N148BsWriter* bs,
+                            N148CabacSession* cabac_session,
                             const uint8_t* src_plane,
                             uint8_t* recon_plane,
                             const uint8_t* const* ref_planes,
@@ -325,7 +330,7 @@ static int encode_one_block(N148BsWriter* bs,
         if (n148_bs_write_ue(bs, (uint32_t)ref_idx) != 0)
             return -1;
         if (entropy_mode == N148_ENTROPY_CABAC) {
-            if (n148_cabac_write_mv(bs, mvx_q4, mvy_q4) != 0)
+            if (n148_cabac_write_mv(cabac_session, bs, mvx_q4, mvy_q4) != 0)
                 return -1;
         } else {
             if (n148_entropy_cavlc_write_mv(bs, mvx_q4, mvy_q4) != 0)
@@ -357,7 +362,7 @@ static int encode_one_block(N148BsWriter* bs,
         if (n148_bs_write_se(bs, 0) != 0)
             return -1;
         if (entropy_mode == N148_ENTROPY_CABAC) {
-            if (n148_cabac_write_block(bs, qzigzag, coeff_count) != 0)
+            if (n148_cabac_write_block(cabac_session, bs, qzigzag, coeff_count) != 0)
                 return -1;
         } else {
             if (n148_entropy_cavlc_write_block(bs, qzigzag, coeff_count) != 0)
@@ -418,11 +423,17 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
     memset(recon_y, 128, (size_t)y_size);
     memset(recon_uv, 128, (size_t)uv_size);
 
+    N148CabacSession cabac_sess;
+    int cabac_active = (ctx->entropy_mode == N148_ENTROPY_CABAC);
+
     n148_bs_writer_init(&bs, out_buf, out_cap);
 
     if (n148_bs_write_u16be(&bs, (uint16_t)ctx->width) != 0) goto fail;
     if (n148_bs_write_u16be(&bs, (uint16_t)ctx->height) != 0) goto fail;
     if (n148_bs_write_u8(&bs, (uint8_t)frame_type) != 0) goto fail;
+
+    if (cabac_active)
+        n148_cabac_session_init_enc(&cabac_sess);
 
     for (mb_y = 0; mb_y < mb_rows; mb_y++) {
         for (mb_x = 0; mb_x < mb_cols; mb_x++) {
@@ -435,6 +446,7 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
                         continue;
 
                         if (encode_one_block(&bs,
+                                         cabac_active ? &cabac_sess : NULL,
                                          src_y,
                                          recon_y,
                                          ref_y,
@@ -462,6 +474,7 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
                             continue;
 
                             if (encode_one_block(&bs,
+                                         cabac_active ? &cabac_sess : NULL,
                                              src_uv,
                                              recon_uv,
                                              ref_uv,
@@ -478,6 +491,11 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
                 }
             }
         }
+    }
+
+    if (cabac_active) {
+        if (n148_cabac_session_finish_enc(&cabac_sess, &bs) != 0)
+            goto fail;
     }
 
     if (n148_bs_flush(&bs) != 0)
@@ -787,6 +805,10 @@ static int n148_create_wrapper(void** out, int width, int height, int fps, int b
     ctx->profile = N148_PROFILE_MAIN;
     ctx->entropy_mode = N148_ENTROPY_CAVLC;
 
+    N148_ENC_LOG("create: %dx%d fps=%d bitrate=%dk profile=%d entropy=%d",
+                 width, height, fps, bitrate_kbps,
+                 ctx->profile, ctx->entropy_mode);
+
     n148_seq_header_defaults(&hdr, width, height, fps,
                              ctx->profile, ctx->entropy_mode);
     hdr.max_ref_frames = 4;
@@ -887,6 +909,9 @@ int n148_encoder_set_profile_entropy_for_tests(void* enc, int profile, int entro
     ctx->profile = profile;
     ctx->entropy_mode = entropy_mode;
 
+    N148_ENC_LOG("set_profile_entropy_for_tests: profile=%d entropy=%d",
+                 ctx->profile, ctx->entropy_mode);
+
     n148_seq_header_defaults(&hdr, ctx->width, ctx->height, ctx->fps,
                              ctx->profile, ctx->entropy_mode);
     hdr.max_ref_frames = (uint8_t)ctx->max_refs;
@@ -898,6 +923,14 @@ int n148_encoder_set_profile_entropy_for_tests(void* enc, int profile, int entro
         return -1;
 
     ctx->codec_private_size = N148_SEQ_HEADER_SIZE;
+
+    N148_ENC_LOG("codec_private rebuilt: size=%d profile=%d entropy=%d refs=%d reorder=%d",
+                 ctx->codec_private_size,
+                 ctx->profile,
+                 ctx->entropy_mode,
+                 ctx->max_refs,
+                 ctx->reorder_delay);
+
     return 0;
 }
 

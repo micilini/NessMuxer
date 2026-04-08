@@ -346,72 +346,71 @@ static int n148_cabac_read_signed_mag_core(N148CabacCore* c, N148BsReader* bs, i
     return 0;
 }
 
-int n148_cabac_write_mv(N148BsWriter* bs, int mvx, int mvy)
+int n148_cabac_write_mv(N148CabacSession* s, N148BsWriter* bs, int mvx, int mvy)
 {
-    if (!bs)
+    if (!s || !bs)
         return -1;
 
-    N148_CABAC_TRACE("write_mv begin: mvx=%d mvy=%d byte_pos=%d bits_left=%d",
-                     mvx, mvy, bs->byte_pos, bs->bits_left);
+    N148_CABAC_TRACE("write_mv begin: mvx=%d mvy=%d", mvx, mvy);
 
-    if (n148_bin_write_signed_mag(bs, mvx) != 0)
+    if (n148_cabac_write_signed_mag_core(&s->core, bs, (int32_t)mvx,
+                                          N148_CTX_MV_X) != 0)
         return -1;
-    if (n148_bin_write_signed_mag(bs, mvy) != 0)
+    if (n148_cabac_write_signed_mag_core(&s->core, bs, (int32_t)mvy,
+                                          N148_CTX_MV_Y) != 0)
         return -1;
 
-    N148_CABAC_TRACE("write_mv end: mvx=%d mvy=%d byte_pos=%d bits_left=%d",
-                     mvx, mvy, bs->byte_pos, bs->bits_left);
     return 0;
 }
 
-int n148_cabac_read_mv(N148BsReader* bs, int* mvx, int* mvy)
+int n148_cabac_read_mv(N148CabacSession* s, N148BsReader* bs, int* mvx, int* mvy)
 {
-    int32_t x = 0;
-    int32_t y = 0;
+    int32_t x = 0, y = 0;
 
-    if (!bs || !mvx || !mvy)
+    if (!s || !bs || !mvx || !mvy)
         return -1;
 
-    if (n148_bin_read_signed_mag(bs, &x) != 0)
+    if (n148_cabac_read_signed_mag_core(&s->core, bs, &x, N148_CTX_MV_X) != 0)
         return -1;
-    if (n148_bin_read_signed_mag(bs, &y) != 0)
+    if (n148_cabac_read_signed_mag_core(&s->core, bs, &y, N148_CTX_MV_Y) != 0)
         return -1;
 
     *mvx = (int)x;
     *mvy = (int)y;
 
-    N148_CABAC_TRACE("read_mv: mvx=%d mvy=%d byte_pos=%d bit_pos=%d",
-                     *mvx, *mvy, bs->byte_pos, bs->bit_pos);
+    N148_CABAC_TRACE("read_mv: mvx=%d mvy=%d", *mvx, *mvy);
     return 0;
 }
 
-int n148_cabac_write_block(N148BsWriter* bs,
+int n148_cabac_write_block(N148CabacSession* s,
+                           N148BsWriter* bs,
                            const int16_t* qcoeff_zigzag,
                            int coeff_count)
 {
     int i;
 
-    if (!bs || !qcoeff_zigzag || coeff_count < 0 || coeff_count > 16)
+    if (!s || !bs || !qcoeff_zigzag || coeff_count < 0 || coeff_count > 16)
         return -1;
 
-    N148_CABAC_TRACE("write_block begin: coeff_count=%d byte_pos=%d bits_left=%d",
-                     coeff_count, bs->byte_pos, bs->bits_left);
+    N148_CABAC_TRACE("write_block begin: coeff_count=%d", coeff_count);
 
-    if (n148_bs_write_ue(bs, (uint32_t)coeff_count) != 0)
+    /* coeff_count via truncated unary com contexto */
+    if (n148_cabac_write_unary_ctx(&s->core, bs, (uint32_t)coeff_count,
+                                    N148_CTX_COEFF_CNT) != 0)
         return -1;
 
     for (i = 0; i < coeff_count; i++) {
-        if (n148_bin_write_signed_mag(bs, (int32_t)qcoeff_zigzag[i]) != 0)
+        if (n148_cabac_write_signed_mag_core(&s->core, bs,
+                                              (int32_t)qcoeff_zigzag[i],
+                                              N148_CTX_COEFF_SIG) != 0)
             return -1;
-        N148_CABAC_TRACE("write_block coeff[%d]=%d", i, (int)qcoeff_zigzag[i]);
     }
 
-    N148_CABAC_TRACE("write_block end: coeff_count=%d byte_pos=%d bits_left=%d",
-                     coeff_count, bs->byte_pos, bs->bits_left);
     return 0;
 }
 
-int n148_cabac_read_block(N148BsReader* bs,
+int n148_cabac_read_block(N148CabacSession* s,
+                          N148BsReader* bs,
                           int16_t* qcoeff_zigzag,
                           int* coeff_count,
                           int max_coeffs)
@@ -420,26 +419,57 @@ int n148_cabac_read_block(N148BsReader* bs,
     int i;
     int32_t level = 0;
 
-    if (!bs || !qcoeff_zigzag || !coeff_count || max_coeffs <= 0)
+    if (!s || !bs || !qcoeff_zigzag || !coeff_count || max_coeffs <= 0)
         return -1;
 
     memset(qcoeff_zigzag, 0, (size_t)max_coeffs * sizeof(qcoeff_zigzag[0]));
 
-    if (n148_bs_read_ue(bs, &count) != 0)
+    if (n148_cabac_read_unary_ctx(&s->core, bs, &count, N148_CTX_COEFF_CNT) != 0)
         return -1;
     if ((int)count > max_coeffs)
         return -1;
 
     for (i = 0; i < (int)count; i++) {
-        if (n148_bin_read_signed_mag(bs, &level) != 0)
+        if (n148_cabac_read_signed_mag_core(&s->core, bs, &level,
+                                             N148_CTX_COEFF_SIG) != 0)
             return -1;
         qcoeff_zigzag[i] = (int16_t)level;
-        N148_CABAC_TRACE("read_block coeff[%d]=%d", i, (int)qcoeff_zigzag[i]);
     }
 
     *coeff_count = (int)count;
-
-    N148_CABAC_TRACE("read_block end: coeff_count=%d byte_pos=%d bit_pos=%d",
-                     *coeff_count, bs->byte_pos, bs->bit_pos);
     return 0;
+}
+
+/* ---- Session management ---- */
+
+void n148_cabac_session_init_enc(N148CabacSession* s)
+{
+    if (!s) return;
+    n148_cabac_core_init_enc(&s->core);
+    n148_cabac_context_init(&s->ctx_coeff_sig,  N148_CABAC_STATE_NEUTRAL, 0);
+    n148_cabac_context_init(&s->ctx_coeff_sign, N148_CABAC_STATE_NEUTRAL, 0);
+    n148_cabac_context_init(&s->ctx_coeff_mag,  N148_CABAC_STATE_NEUTRAL, 1);
+    n148_cabac_context_init(&s->ctx_mv_sig,     N148_CABAC_STATE_NEUTRAL, 0);
+    n148_cabac_context_init(&s->ctx_mv_sign,    N148_CABAC_STATE_NEUTRAL, 0);
+    n148_cabac_context_init(&s->ctx_mv_mag,     N148_CABAC_STATE_NEUTRAL, 1);
+    n148_cabac_context_init(&s->ctx_count,      N148_CABAC_STATE_NEUTRAL, 1);
+}
+
+void n148_cabac_session_init_dec(N148CabacSession* s, N148BsReader* bs)
+{
+    if (!s || !bs) return;
+    n148_cabac_core_init_dec(&s->core, bs);
+    n148_cabac_context_init(&s->ctx_coeff_sig,  N148_CABAC_STATE_NEUTRAL, 0);
+    n148_cabac_context_init(&s->ctx_coeff_sign, N148_CABAC_STATE_NEUTRAL, 0);
+    n148_cabac_context_init(&s->ctx_coeff_mag,  N148_CABAC_STATE_NEUTRAL, 1);
+    n148_cabac_context_init(&s->ctx_mv_sig,     N148_CABAC_STATE_NEUTRAL, 0);
+    n148_cabac_context_init(&s->ctx_mv_sign,    N148_CABAC_STATE_NEUTRAL, 0);
+    n148_cabac_context_init(&s->ctx_mv_mag,     N148_CABAC_STATE_NEUTRAL, 1);
+    n148_cabac_context_init(&s->ctx_count,      N148_CABAC_STATE_NEUTRAL, 1);
+}
+
+int n148_cabac_session_finish_enc(N148CabacSession* s, N148BsWriter* bs)
+{
+    if (!s || !bs) return -1;
+    return n148_cabac_finish_enc(&s->core, bs);
 }

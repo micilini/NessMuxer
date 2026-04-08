@@ -58,17 +58,22 @@ static int test_mv_roundtrip(void)
     int mvy = -3;
     int mvx_out = 0;
     int mvy_out = 0;
+    N148CabacSession enc_s, dec_s;
 
     TEST("CABAC public MV roundtrip");
 
     n148_bs_writer_init(&wr, buf, (int)sizeof(buf));
-    if (n148_cabac_write_mv(&wr, mvx, mvy) != 0)
+    n148_cabac_session_init_enc(&enc_s);
+    if (n148_cabac_write_mv(&enc_s, &wr, mvx, mvy) != 0)
         FAIL("write_mv");
+    if (n148_cabac_session_finish_enc(&enc_s, &wr) != 0)
+        FAIL("finish_enc");
     if (n148_bs_flush(&wr) != 0)
         FAIL("flush");
 
     n148_bs_reader_init(&rd, buf, n148_bs_writer_bytes_written(&wr));
-    if (n148_cabac_read_mv(&rd, &mvx_out, &mvy_out) != 0)
+    n148_cabac_session_init_dec(&dec_s, &rd);
+    if (n148_cabac_read_mv(&dec_s, &rd, &mvx_out, &mvy_out) != 0)
         FAIL("read_mv");
     if (mvx_out != mvx || mvy_out != mvy)
         FAIL("mv mismatch");
@@ -79,24 +84,29 @@ static int test_mv_roundtrip(void)
 
 static int test_block_roundtrip(void)
 {
-    uint8_t buf[128] = {0};
+    uint8_t buf[256] = {0};
     N148BsWriter wr;
     N148BsReader rd;
     int16_t in_coeffs[16]  = {12, -4, 0, 3, -1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0};
     int16_t out_coeffs[16] = {0};
     int coeff_count = 0;
     int i;
+    N148CabacSession enc_s, dec_s;
 
     TEST("CABAC public block roundtrip");
 
     n148_bs_writer_init(&wr, buf, (int)sizeof(buf));
-    if (n148_cabac_write_block(&wr, in_coeffs, 16) != 0)
+    n148_cabac_session_init_enc(&enc_s);
+    if (n148_cabac_write_block(&enc_s, &wr, in_coeffs, 16) != 0)
         FAIL("write_block");
+    if (n148_cabac_session_finish_enc(&enc_s, &wr) != 0)
+        FAIL("finish_enc");
     if (n148_bs_flush(&wr) != 0)
         FAIL("flush");
 
     n148_bs_reader_init(&rd, buf, n148_bs_writer_bytes_written(&wr));
-    if (n148_cabac_read_block(&rd, out_coeffs, &coeff_count, 16) != 0)
+    n148_cabac_session_init_dec(&dec_s, &rd);
+    if (n148_cabac_read_block(&dec_s, &rd, out_coeffs, &coeff_count, 16) != 0)
         FAIL("read_block");
     if (coeff_count != 16)
         FAIL("coeff_count");

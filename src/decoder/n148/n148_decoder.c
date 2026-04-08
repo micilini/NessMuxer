@@ -13,6 +13,10 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+
+#define N148_DEC_LOG(fmt, ...) \
+    fprintf(stderr, "[N148 DEC] " fmt "\n", ##__VA_ARGS__)
 
 #define N148_MAX_NALS 64
 
@@ -79,6 +83,7 @@ static void load_pred_block(uint8_t* plane, int stride,
 }
 
 static int reconstruct_inter_or_intra_block(N148BsReader* bs,
+                                            N148CabacSession* cabac_session,
                                             uint8_t* dst_plane,
                                             const uint8_t* ref_plane,
                                             int stride,
@@ -148,9 +153,11 @@ static int reconstruct_inter_or_intra_block(N148BsReader* bs,
         if (n148_bs_read_ue(bs, &ref_idx) != 0)
             return -1;
         if (entropy_mode == N148_ENTROPY_CABAC) {
-            if (n148_cabac_read_mv(bs, &mvx_q4, &mvy_q4) != 0)
+            N148_DEC_LOG("read_mv via CABAC");
+            if (n148_cabac_read_mv(cabac_session, bs, &mvx_q4, &mvy_q4) != 0)
                 return -1;
         } else {
+            N148_DEC_LOG("read_mv via CAVLC");
             if (n148_entropy_cavlc_read_mv(bs, &mvx_q4, &mvy_q4) != 0)
                 return -1;
         }
@@ -190,9 +197,11 @@ static int reconstruct_inter_or_intra_block(N148BsReader* bs,
             return -1;
 
         if (entropy_mode == N148_ENTROPY_CABAC) {
-            if (n148_cabac_read_block(bs, qzigzag, &coeff_count, 16) != 0)
+            N148_DEC_LOG("read_block via CABAC");
+            if (n148_cabac_read_block(cabac_session, bs, qzigzag, &coeff_count, 16) != 0)
                 return -1;
         } else {
+            N148_DEC_LOG("read_block via CAVLC");
             if (n148_entropy_cavlc_read_block(bs, qzigzag, &coeff_count, 16) != 0)
                 return -1;
         }
@@ -243,6 +252,14 @@ int n148_decoder_init_from_seq_header(N148Decoder* dec, const uint8_t* data, int
     dec->height = dec->seq_hdr.height;
     dec->stride = dec->width;
     dec->seq_hdr_valid = 1;
+
+    N148_DEC_LOG("seq_header: %dx%d profile=%d entropy=%d refs=%d reorder=%d",
+                 dec->seq_hdr.width,
+                 dec->seq_hdr.height,
+                 dec->seq_hdr.profile,
+                 dec->seq_hdr.entropy_mode,
+                 dec->seq_hdr.max_ref_frames,
+                 dec->seq_hdr.max_reorder_depth);
 
     if (dec->frame_buf) {
         free(dec->frame_buf);
@@ -334,6 +351,8 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
             uint8_t* dst_y;
             uint8_t* dst_uv;
             int mb_x, mb_y, blk_x, blk_y, ch;
+            N148CabacSession cabac_sess;
+            N148CabacSession* cabac_ptr = NULL;
 
             if (!dec->seq_hdr_valid || !frm_hdr_found)
                 goto fail;
@@ -354,6 +373,11 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
 
             if (slice_frame_type != frm_hdr.frame_type)
                 goto fail;
+
+            if (dec->seq_hdr.entropy_mode == N148_ENTROPY_CABAC) {
+                n148_cabac_session_init_dec(&cabac_sess, &bs);
+                cabac_ptr = &cabac_sess;
+            }
 
             if ((slice_frame_type == N148_FRAME_P || slice_frame_type == N148_FRAME_B) && !dec->ref_ready)
                 goto fail;
@@ -399,6 +423,7 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
 
                                 if (reconstruct_inter_or_intra_block(
                                         &bs,
+                                        cabac_ptr,
                                         dst_y,
                                         ref_y_planes[peek_ref_idx],
                                         dec->stride,
@@ -412,6 +437,7 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
                             } else {
                                 if (reconstruct_inter_or_intra_block(
                                         &bs,
+                                        cabac_ptr,
                                         dst_y,
                                         NULL,
                                         dec->stride,
@@ -461,6 +487,7 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
 
                                     if (reconstruct_inter_or_intra_block(
                                             &bs,
+                                            cabac_ptr,
                                             dst_uv,
                                             ref_uv_planes[peek_ref_idx],
                                             dec->stride,
@@ -474,6 +501,7 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
                                 } else {
                                     if (reconstruct_inter_or_intra_block(
                                             &bs,
+                                            cabac_ptr,
                                             dst_uv,
                                             NULL,
                                             dec->stride,
