@@ -240,6 +240,7 @@ int mkv_muxer_open(MkvMuxer** out_mux, const char* path,
 int mkv_muxer_write_packet(MkvMuxer* mux, const MkvPacket* pkt)
 {
     int64_t pts_ms;
+    int64_t dts_ms;
     int16_t rel_ts;
     int mp4_size = 0;
     int block_data_size;
@@ -249,13 +250,15 @@ int mkv_muxer_write_packet(MkvMuxer* mux, const MkvPacket* pkt)
         return -1;
 
     pts_ms = pkt->pts_hns / 10000;
+    dts_ms = pkt->dts_hns / 10000;
 
     need_new_cluster = !mux->cluster_open ||
                        mux->cluster_block_count >= MKV_CLUSTER_MAX_FRAMES ||
-                       (pkt->is_keyframe && mux->cluster_block_count > 0);
+                       (pkt->is_keyframe && mux->cluster_block_count > 0) ||
+                       (mux->cluster_open && dts_ms < mux->cluster_pts_ms);
 
     if (need_new_cluster) {
-        open_cluster(mux, pts_ms);
+        open_cluster(mux, dts_ms);
         if (pkt->is_keyframe)
             add_cue(mux, pts_ms, mux->cluster_pos);
     }

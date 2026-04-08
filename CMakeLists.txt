@@ -226,6 +226,7 @@ if(NESS_USE_N148)
         src/encoder/n148/n148_quant.c
         src/encoder/n148/n148_entropy_enc_cavlc.c
         src/encoder/n148/n148_ratecontrol_basic.c
+        src/encoder/n148/n148_reorder.c
     )
 
     target_sources(test_full_pipeline PRIVATE
@@ -244,6 +245,7 @@ if(NESS_USE_N148)
         src/encoder/n148/n148_quant.c
         src/encoder/n148/n148_entropy_enc_cavlc.c
         src/encoder/n148/n148_ratecontrol_basic.c
+        src/encoder/n148/n148_reorder.c
     )
 endif()
 
@@ -295,6 +297,7 @@ add_executable(test_n148_encoder
     src/encoder/n148/n148_quant.c
     src/encoder/n148/n148_entropy_enc_cavlc.c
     src/encoder/n148/n148_ratecontrol_basic.c
+    src/encoder/n148/n148_reorder.c
 )
 target_include_directories(test_n148_encoder PRIVATE src)
 
@@ -318,6 +321,7 @@ add_executable(test_n148_roundtrip
     src/encoder/n148/n148_quant.c
     src/encoder/n148/n148_entropy_enc_cavlc.c
     src/encoder/n148/n148_ratecontrol_basic.c
+    src/encoder/n148/n148_reorder.c
 )
 target_include_directories(test_n148_roundtrip PRIVATE src)
 
@@ -326,6 +330,18 @@ add_executable(test_n148_interpolation
     src/common/interpolation.c
 )
 target_include_directories(test_n148_interpolation PRIVATE src)
+
+add_executable(test_n148_reorder
+    test/test_n148_reorder.c
+    src/encoder/n148/n148_reorder.c
+)
+target_include_directories(test_n148_reorder PRIVATE src)
+
+add_executable(test_n148_gop_planner
+    test/test_n148_gop_planner.c
+    src/encoder/n148/n148_reorder.c
+)
+target_include_directories(test_n148_gop_planner PRIVATE src)
 
 # ===========================================================================
 # CLI Tools

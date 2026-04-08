@@ -8,6 +8,7 @@ typedef struct NessEncodedPacket {
     uint8_t* data;
     int      size;
     int64_t  pts_hns;
+    int64_t  dts_hns;
     int64_t  duration_hns;
     int      is_keyframe;
 } NessEncodedPacket;

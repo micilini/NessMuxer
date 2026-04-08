@@ -89,7 +89,7 @@ int main(void)
     if (g_n148_encoder_vtable.submit_frame(enc, nv12, frame_size) != 0)
         return 4;
 
-    if (g_n148_encoder_vtable.receive_packets(enc, collect_packet, NULL) != 0)
+    if (g_n148_encoder_vtable.drain(enc, collect_packet, NULL) != 0)
         return 5;
 
     if (!g_pkt || g_pkt_size <= 0 || !g_pkt_key)

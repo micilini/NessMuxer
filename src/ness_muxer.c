@@ -77,7 +77,7 @@ static int on_encoded_packet(void* userdata, const NessEncodedPacket* pkt)
         mkv_pkt.data = pkt->data;
         mkv_pkt.size = pkt->size;
         mkv_pkt.pts_hns = pkt->pts_hns;
-        mkv_pkt.dts_hns = pkt->pts_hns;
+        mkv_pkt.dts_hns = pkt->dts_hns;
         mkv_pkt.is_keyframe = pkt->is_keyframe;
 
         if (mkv_muxer_write_packet(m->muxer, &mkv_pkt) != 0) {

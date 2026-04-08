@@ -23,6 +23,11 @@ struct N148Decoder {
     uint8_t*        frame_buf;
     int             frame_buf_size;
 
+    uint8_t*        pending_anchor_buf;
+    int64_t         pending_anchor_pts;
+    int             pending_anchor_frame_type;
+    int             pending_anchor_valid;
+
     N148ReferenceFrames refs;
     int ref_ready;
 };
@@ -215,6 +220,10 @@ int n148_decoder_create(N148Decoder** out)
     if (!dec) return -1;
 
     dec->ref_ready = 0;
+    dec->pending_anchor_buf = NULL;
+    dec->pending_anchor_pts = 0;
+    dec->pending_anchor_frame_type = 0;
+    dec->pending_anchor_valid = 0;
     memset(&dec->refs, 0, sizeof(dec->refs));
 
     *out = dec;
@@ -238,9 +247,22 @@ int n148_decoder_init_from_seq_header(N148Decoder* dec, const uint8_t* data, int
         dec->frame_buf = NULL;
     }
 
+    if (dec->pending_anchor_buf) {
+        free(dec->pending_anchor_buf);
+        dec->pending_anchor_buf = NULL;
+    }
+
     dec->frame_buf_size = dec->width * dec->height * 3 / 2;
+
     dec->frame_buf = (uint8_t*)malloc((size_t)dec->frame_buf_size);
     if (!dec->frame_buf) return -1;
+
+    dec->pending_anchor_buf = (uint8_t*)malloc((size_t)dec->frame_buf_size);
+    if (!dec->pending_anchor_buf) return -1;
+
+    dec->pending_anchor_pts = 0;
+    dec->pending_anchor_frame_type = 0;
+    dec->pending_anchor_valid = 0;
 
     if (!dec->refs.y[0] || !dec->refs.uv[0]) {
         if (n148_refs_init(&dec->refs, dec->width, dec->height) != 0)
@@ -261,6 +283,7 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
     int i;
     uint8_t* clean_data = NULL;
     int clean_size = 0;
+    int had_ref_ready_before = 0;
 
     if (!dec || !data || size <= 0 || !out_frame)
         return -1;
@@ -330,10 +353,10 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
             if (slice_frame_type != frm_hdr.frame_type)
                 goto fail;
 
-            if (slice_frame_type == N148_FRAME_P && !dec->ref_ready)
+            if ((slice_frame_type == N148_FRAME_P || slice_frame_type == N148_FRAME_B) && !dec->ref_ready)
                 goto fail;
 
-            if (slice_frame_type == N148_FRAME_P) {
+            if (slice_frame_type == N148_FRAME_P || slice_frame_type == N148_FRAME_B) {
                 int ri;
                 for (ri = 0; ri < dec->refs.count && ri < 4; ri++) {
                     if (n148_refs_get_planes(&dec->refs, ri, &ref_y_planes[ri], &ref_uv_planes[ri]) != 0)
@@ -471,28 +494,80 @@ int n148_decoder_decode(N148Decoder* dec, const uint8_t* data, int size,
         }
     }
 
+    had_ref_ready_before = dec->ref_ready;
+
     if (!slice_found)
         goto fail;
 
-    out_frame->planes[0]  = dec->frame_buf;
-    out_frame->planes[1]  = dec->frame_buf + dec->width * dec->height;
-    out_frame->planes[2]  = NULL;
-    out_frame->strides[0] = dec->stride;
-    out_frame->strides[1] = dec->stride;
-    out_frame->strides[2] = 0;
-    out_frame->width      = dec->width;
-    out_frame->height     = dec->height;
-    out_frame->pts        = frm_hdr.pts;
-    out_frame->frame_type = frm_hdr.frame_type;
+        if (frm_hdr.frame_type != N148_FRAME_B) {
+        if (n148_refs_store_nv12(&dec->refs,
+                                 dec->frame_buf,
+                                 dec->frame_buf + dec->width * dec->height,
+                                 dec->width, dec->height) != 0)
+            goto fail;
 
-    if (n148_refs_store_nv12(&dec->refs, out_frame->planes[0], out_frame->planes[1],
-                             dec->width, dec->height) != 0)
-        goto fail;
+        dec->ref_ready = 1;
+    }
 
-    dec->ref_ready = 1;
+    if (frm_hdr.frame_type == N148_FRAME_B) {
+        out_frame->planes[0]  = dec->frame_buf;
+        out_frame->planes[1]  = dec->frame_buf + dec->width * dec->height;
+        out_frame->planes[2]  = NULL;
+        out_frame->strides[0] = dec->stride;
+        out_frame->strides[1] = dec->stride;
+        out_frame->strides[2] = 0;
+        out_frame->width      = dec->width;
+        out_frame->height     = dec->height;
+        out_frame->pts        = frm_hdr.pts;
+        out_frame->frame_type = frm_hdr.frame_type;
 
+        free(clean_data);
+        return 0;
+    }
+
+    if (frm_hdr.frame_type == N148_FRAME_I && !had_ref_ready_before && !dec->pending_anchor_valid) {
+        out_frame->planes[0]  = dec->frame_buf;
+        out_frame->planes[1]  = dec->frame_buf + dec->width * dec->height;
+        out_frame->planes[2]  = NULL;
+        out_frame->strides[0] = dec->stride;
+        out_frame->strides[1] = dec->stride;
+        out_frame->strides[2] = 0;
+        out_frame->width      = dec->width;
+        out_frame->height     = dec->height;
+        out_frame->pts        = frm_hdr.pts;
+        out_frame->frame_type = frm_hdr.frame_type;
+
+        free(clean_data);
+        return 0;
+    }
+
+    if (dec->pending_anchor_valid) {
+        out_frame->planes[0]  = dec->pending_anchor_buf;
+        out_frame->planes[1]  = dec->pending_anchor_buf + dec->width * dec->height;
+        out_frame->planes[2]  = NULL;
+        out_frame->strides[0] = dec->stride;
+        out_frame->strides[1] = dec->stride;
+        out_frame->strides[2] = 0;
+        out_frame->width      = dec->width;
+        out_frame->height     = dec->height;
+        out_frame->pts        = dec->pending_anchor_pts;
+        out_frame->frame_type = dec->pending_anchor_frame_type;
+    } else {
+        memset(out_frame, 0, sizeof(*out_frame));
+    }
+
+    memcpy(dec->pending_anchor_buf, dec->frame_buf, (size_t)dec->frame_buf_size);
+    dec->pending_anchor_pts = frm_hdr.pts;
+    dec->pending_anchor_frame_type = frm_hdr.frame_type;
+
+    if (dec->pending_anchor_valid) {
+        free(clean_data);
+        return 0;
+    }
+
+    dec->pending_anchor_valid = 1;
     free(clean_data);
-    return 0;
+    return 1;
 
 fail:
     free(clean_data);
@@ -501,15 +576,37 @@ fail:
 
 int n148_decoder_flush(N148Decoder* dec, N148DecodedFrame* out_frame)
 {
-    (void)dec;
-    if (out_frame) memset(out_frame, 0, sizeof(*out_frame));
-    return -1;
+    if (!dec || !out_frame)
+        return -1;
+
+    memset(out_frame, 0, sizeof(*out_frame));
+
+    if (!dec->pending_anchor_valid)
+        return 1;
+
+    out_frame->planes[0]  = dec->pending_anchor_buf;
+    out_frame->planes[1]  = dec->pending_anchor_buf + dec->width * dec->height;
+    out_frame->planes[2]  = NULL;
+    out_frame->strides[0] = dec->stride;
+    out_frame->strides[1] = dec->stride;
+    out_frame->strides[2] = 0;
+    out_frame->width      = dec->width;
+    out_frame->height     = dec->height;
+    out_frame->pts        = dec->pending_anchor_pts;
+    out_frame->frame_type = dec->pending_anchor_frame_type;
+
+    dec->pending_anchor_valid = 0;
+    dec->pending_anchor_pts = 0;
+    dec->pending_anchor_frame_type = 0;
+
+    return 0;
 }
 
 void n148_decoder_destroy(N148Decoder* dec)
 {
     if (!dec) return;
     if (dec->frame_buf) free(dec->frame_buf);
+    if (dec->pending_anchor_buf) free(dec->pending_anchor_buf);
     n148_refs_free(&dec->refs);
     free(dec);
 }
