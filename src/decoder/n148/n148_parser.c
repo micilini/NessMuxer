@@ -37,9 +37,17 @@ int n148_find_nal_units(const uint8_t* data, int size,
            
             next_nal = nal_start + 1;
             while (next_nal + 2 < size) {
-                if (data[next_nal] == 0x00 && data[next_nal + 1] == 0x00 &&
-                    data[next_nal + 2] == 0x01)
-                    break;
+                if (data[next_nal] == 0x00 && data[next_nal + 1] == 0x00) {
+                    if (data[next_nal + 2] == 0x01) {
+                        break;
+                    }
+                    if (data[next_nal + 2] == 0x03 &&
+                        next_nal + 3 < size &&
+                        data[next_nal + 3] <= 0x03) {
+                        next_nal += 3;
+                        continue;
+                    }
+                }
                 next_nal++;
             }
             if (next_nal + 2 >= size)
@@ -81,12 +89,46 @@ int n148_parse_frame_header(const uint8_t* payload, int size, N148FrameHeader* o
 
     if (out->num_ref_frames > 16) return -1;
 
-    for (i = 0; i < out->num_ref_frames; i++) {
-        if (n148_bs_read_u8(&bs, &u8) != 0) return -1;
-        out->ref_indices[i] = u8;
-    }
-
     if (n148_bs_read_u32be(&bs, &out->frame_data_size) != 0) return -1;
 
+    return 0;
+}
+
+int n148_find_nal_units_lp(const uint8_t* data, int size,
+                           N148NalUnit* nals, int max_nals, int* nal_count)
+{
+    int pos = 0;
+    int count = 0;
+
+    if (!data || size <= 0 || !nals || !nal_count)
+        return -1;
+
+    *nal_count = 0;
+
+    while (pos + 4 < size && count < max_nals) {
+        int nal_size = ((int)data[pos] << 24) |
+                       ((int)data[pos + 1] << 16) |
+                       ((int)data[pos + 2] << 8) |
+                       (int)data[pos + 3];
+        int nal_type;
+        pos += 4;
+
+        if (nal_size <= 0 || pos + nal_size > size)
+            break;
+
+        if (n148_parse_nal_header(data[pos], &nal_type) != 0) {
+            pos += nal_size;
+            continue;
+        }
+
+        nals[count].nal_type     = nal_type;
+        nals[count].payload      = data + pos + 1;
+        nals[count].payload_size = nal_size - 1;
+        count++;
+
+        pos += nal_size;
+    }
+
+    *nal_count = count;
     return 0;
 }

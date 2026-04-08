@@ -14,4 +14,6 @@ int n148_packetize(const uint8_t* raw_bitstream, int raw_size,
 
 int n148_is_keyframe(const uint8_t* data, int size);
 
+int n148_remove_epb(const uint8_t* src, int src_size, uint8_t* dst);
+
 #endif

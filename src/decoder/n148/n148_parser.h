@@ -7,6 +7,9 @@
 int n148_find_nal_units(const uint8_t* data, int size,
                         N148NalUnit* nals, int max_nals, int* nal_count);
 
+int n148_find_nal_units_lp(const uint8_t* data, int size,
+                           N148NalUnit* nals, int max_nals, int* nal_count);
+
 
 int n148_parse_nal_header(uint8_t header_byte, int* nal_type);
 

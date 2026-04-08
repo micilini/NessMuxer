@@ -95,16 +95,13 @@ int main(void)
     if (!g_pkt || g_pkt_size <= 0 || !g_pkt_key)
         return 6;
 
-    if (depacketize_to_startcode(g_pkt, g_pkt_size, &raw_bs, &raw_bs_size) != 0)
-        return 7;
-
     if (n148_decoder_create(&dec) != 0 || !dec)
         return 8;
 
     if (n148_decoder_init_from_seq_header(dec, cp, cp_size) != 0)
         return 9;
 
-    if (n148_decoder_decode(dec, raw_bs, raw_bs_size, &frame) != 0)
+    if (n148_decoder_decode(dec, g_pkt, g_pkt_size, &frame) != 0)
         return 10;
 
     if (frame.width != 64 || frame.height != 64 || frame.frame_type != 1)
@@ -130,7 +127,6 @@ int main(void)
 
     free(nv12);
     free(cp);
-    free(raw_bs);
     free(g_pkt);
     n148_decoder_destroy(dec);
     g_n148_encoder_vtable.destroy(enc);

@@ -5,4 +5,6 @@
 
 extern const NessEncoderVtable g_n148_encoder_vtable;
 
+#define N148_GOP_KEYINT_DEFAULT 30
+
 #endif

@@ -3,11 +3,22 @@
 
 #include <stdint.h>
 
-typedef struct N148Dpb N148Dpb;
+#define N148_MAX_REF_FRAMES 4
 
-int  n148_dpb_create(N148Dpb** out, int max_refs, int frame_size);
-int  n148_dpb_store(N148Dpb* dpb, const uint8_t* frame_data, int frame_size, int is_ref);
-const uint8_t* n148_dpb_get_ref(N148Dpb* dpb, int index);
-void n148_dpb_destroy(N148Dpb* dpb);
+typedef struct {
+    uint8_t* y[N148_MAX_REF_FRAMES];
+    uint8_t* uv[N148_MAX_REF_FRAMES];
+    int width;
+    int height;
+    int count;
+} N148ReferenceFrames;
+
+int  n148_refs_init(N148ReferenceFrames* refs, int width, int height);
+void n148_refs_free(N148ReferenceFrames* refs);
+int  n148_refs_store_nv12(N148ReferenceFrames* refs,
+                          const uint8_t* y, const uint8_t* uv,
+                          int width, int height);
+int  n148_refs_get_planes(const N148ReferenceFrames* refs, int ref_idx,
+                          const uint8_t** out_y, const uint8_t** out_uv);
 
 #endif

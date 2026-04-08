@@ -1,9 +1,12 @@
 #include "n148_encoder.h"
 #include "n148_intra.h"
+#include "n148_inter.h"
 #include "n148_transform.h"
 #include "n148_quant.h"
 #include "n148_entropy_enc_cavlc.h"
 #include "n148_ratecontrol_basic.h"
+#include "../../common/interpolation.h"
+#include "../../common/motion_search_qpel.h"
 
 #include "../../codec/n148/n148_spec.h"
 #include "../../codec/n148/n148_bitstream.h"
@@ -21,12 +24,21 @@ typedef struct {
     int bitrate_kbps;
 
     int qp;
+    int keyint;
+    int search_range;
+
     int64_t frame_duration_hns;
     int64_t next_pts_hns;
     uint32_t frame_number;
 
     uint8_t codec_private[N148_SEQ_HEADER_SIZE];
     int codec_private_size;
+
+    uint8_t* ref_y[4];
+    uint8_t* ref_uv[4];
+    int ref_count;
+    int max_refs;
+    int enable_qpel;
 
     uint8_t* pending_data;
     int pending_size;
@@ -78,17 +90,92 @@ static void store_block(uint8_t* plane, int stride,
     }
 }
 
+static int block_sad_from_buffers(const uint8_t src[16], const uint8_t pred[16], int* out_sad)
+{
+    int sad = 0;
+    int i;
+
+    if (!out_sad)
+        return -1;
+
+    for (i = 0; i < 16; i++) {
+        int d = (int)src[i] - (int)pred[i];
+        sad += (d < 0) ? -d : d;
+    }
+
+    *out_sad = sad;
+    return 0;
+}
+
+static void build_inter_prediction_4x4(const uint8_t* ref_plane, int stride,
+                                       int width, int height,
+                                       int bx, int by,
+                                       int mvx_q4, int mvy_q4,
+                                       int sample_stride, int sample_offset,
+                                       uint8_t pred[16])
+{
+    n148_interp_block_4x4_qpel(pred,
+                               ref_plane, stride,
+                               width, height,
+                               bx, by,
+                               mvx_q4, mvy_q4,
+                               sample_stride, sample_offset);
+}
+
+static int ensure_ref_buffers(N148EncoderCtx* ctx, int y_size, int uv_size)
+{
+    int i;
+
+    for (i = 0; i < ctx->max_refs; i++) {
+        if (!ctx->ref_y[i]) {
+            ctx->ref_y[i] = (uint8_t*)malloc((size_t)y_size);
+            if (!ctx->ref_y[i])
+                return -1;
+        }
+        if (!ctx->ref_uv[i]) {
+            ctx->ref_uv[i] = (uint8_t*)malloc((size_t)uv_size);
+            if (!ctx->ref_uv[i])
+                return -1;
+        }
+    }
+
+    return 0;
+}
+
+static void push_reference_frame(N148EncoderCtx* ctx,
+                                 const uint8_t* recon_y, const uint8_t* recon_uv,
+                                 int y_size, int uv_size)
+{
+    int i;
+
+    for (i = ctx->max_refs - 1; i > 0; i--) {
+        memcpy(ctx->ref_y[i], ctx->ref_y[i - 1], (size_t)y_size);
+        memcpy(ctx->ref_uv[i], ctx->ref_uv[i - 1], (size_t)uv_size);
+    }
+
+    memcpy(ctx->ref_y[0], recon_y, (size_t)y_size);
+    memcpy(ctx->ref_uv[0], recon_uv, (size_t)uv_size);
+
+    if (ctx->ref_count < ctx->max_refs)
+        ctx->ref_count++;
+}
+
 static int encode_one_block(N148BsWriter* bs,
                             const uint8_t* src_plane,
                             uint8_t* recon_plane,
+                            const uint8_t* const* ref_planes,
+                            int ref_count,
                             int stride,
                             int width, int height,
                             int bx, int by,
                             int sample_stride, int sample_offset,
-                            int qp)
+                            int qp,
+                            int search_range,
+                            int allow_inter)
 {
     uint8_t src[16];
     uint8_t pred[16];
+    uint8_t intra_pred[16];
     uint8_t recon_u8[16];
     int16_t residual[16];
     int16_t coeff[16];
@@ -96,27 +183,80 @@ static int encode_one_block(N148BsWriter* bs,
     int16_t qnatural[16];
     int16_t dequant[16];
     int16_t spatial[16];
-    int mode;
+    int intra_mode;
+    int intra_sad = 0;
     int coeff_count;
     int i;
+    int final_mode = 2;
+    int ref_idx = 0;
+    int mvx_q4 = 0;
+    int mvy_q4 = 0;
 
     load_block(src_plane, stride, width, height,
                bx, by, sample_stride, sample_offset, src);
 
-    mode = n148_intra_choose_mode(src_plane, recon_plane, stride,
+    intra_mode = n148_intra_choose_mode(src_plane, recon_plane, stride,
+                                        width, height,
+                                        bx, by,
+                                        sample_stride, sample_offset,
+                                        intra_pred);
+
+    block_sad_from_buffers(src, intra_pred, &intra_sad);
+
+    memcpy(pred, intra_pred, sizeof(pred));
+
+        if (allow_inter && ref_planes && ref_count > 0) {
+        N148InterDecision decision;
+
+        if (n148_inter_choose_4x4(src_plane, ref_planes, ref_count,
+                                  stride,
                                   width, height,
                                   bx, by,
                                   sample_stride, sample_offset,
-                                  pred);
+                                  search_range,
+                                  qp,
+                                  intra_sad,
+                                  &decision) == 0) {
+            if (decision.mode == 0 || decision.mode == 1) {
+                final_mode = decision.mode;
+                ref_idx = decision.ref_idx;
+                mvx_q4 = decision.mvx_q4;
+                mvy_q4 = decision.mvy_q4;
+                build_inter_prediction_4x4(ref_planes[ref_idx], stride, width, height,
+                                           bx, by, mvx_q4, mvy_q4,
+                                           sample_stride, sample_offset,
+                                           pred);
+            } else {
+                final_mode = 2;
+            }
+        }
+    }
+
+    if (n148_bs_write_ue(bs, (uint32_t)final_mode) != 0)
+        return -1;
+
+    if (final_mode == 2) {
+        if (n148_bs_write_ue(bs, (uint32_t)intra_mode) != 0)
+            return -1;
+    } else {
+        if (n148_bs_write_ue(bs, (uint32_t)ref_idx) != 0)
+            return -1;
+        if (n148_cavlc_write_mv(bs, mvx_q4, mvy_q4) != 0)
+            return -1;
+    }
+
+    if (final_mode == 0) {
+        memcpy(recon_u8, pred, sizeof(recon_u8));
+        store_block(recon_plane, stride, width, height,
+                    bx, by, sample_stride, sample_offset, recon_u8);
+        return 0;
+    }
 
     for (i = 0; i < 16; i++)
         residual[i] = (int16_t)((int)src[i] - (int)pred[i]);
 
     n148_fdct_4x4(residual, coeff);
     coeff_count = n148_quantize_4x4(coeff, qzigzag, qp);
-
-    if (n148_bs_write_ue(bs, (uint32_t)mode) != 0)
-        return -1;
 
     if (coeff_count <= 0) {
         if (n148_bs_write_bits(bs, 1, 0) != 0)
@@ -146,13 +286,16 @@ static int encode_one_block(N148BsWriter* bs,
     return 0;
 }
 
-static int encode_iframe_slice(N148EncoderCtx* ctx,
-                               const uint8_t* nv12,
-                               uint8_t* out_buf, int out_cap, int* out_size)
+static int encode_frame_slice(N148EncoderCtx* ctx,
+                              const uint8_t* nv12,
+                              int frame_type,
+                              uint8_t* out_buf, int out_cap, int* out_size)
 {
     N148BsWriter bs;
     const uint8_t* src_y = nv12;
     const uint8_t* src_uv = nv12 + ctx->width * ctx->height;
+    const uint8_t* ref_y[4] = { 0 };
+    const uint8_t* ref_uv[4] = { 0 };
     uint8_t* recon_y = NULL;
     uint8_t* recon_uv = NULL;
     int y_size = ctx->width * ctx->height;
@@ -160,6 +303,14 @@ static int encode_iframe_slice(N148EncoderCtx* ctx,
     int mb_cols = (ctx->width + 15) / 16;
     int mb_rows = (ctx->height + 15) / 16;
     int mb_x, mb_y, blk_x, blk_y, ch;
+
+    {
+        int ri;
+        for (ri = 0; ri < ctx->ref_count && ri < ctx->max_refs; ri++) {
+            ref_y[ri] = ctx->ref_y[ri];
+            ref_uv[ri] = ctx->ref_uv[ri];
+        }
+    }
 
     *out_size = 0;
 
@@ -178,6 +329,7 @@ static int encode_iframe_slice(N148EncoderCtx* ctx,
 
     if (n148_bs_write_u16be(&bs, (uint16_t)ctx->width) != 0) goto fail;
     if (n148_bs_write_u16be(&bs, (uint16_t)ctx->height) != 0) goto fail;
+    if (n148_bs_write_u8(&bs, (uint8_t)frame_type) != 0) goto fail;
 
     for (mb_y = 0; mb_y < mb_rows; mb_y++) {
         for (mb_x = 0; mb_x < mb_cols; mb_x++) {
@@ -189,9 +341,17 @@ static int encode_iframe_slice(N148EncoderCtx* ctx,
                     if (bx >= ctx->width || by >= ctx->height)
                         continue;
 
-                    if (encode_one_block(&bs, src_y, recon_y, ctx->width,
+                        if (encode_one_block(&bs,
+                                         src_y,
+                                         recon_y,
+                                         ref_y,
+                                         ctx->ref_count,
+                                         ctx->width,
                                          ctx->width, ctx->height,
-                                         bx, by, 1, 0, ctx->qp) != 0)
+                                         bx, by, 1, 0,
+                                         ctx->qp,
+                                         ctx->search_range,
+                                         (frame_type == N148_FRAME_P && ctx->ref_count > 0)) != 0)
                         goto fail;
                 }
             }
@@ -207,9 +367,17 @@ static int encode_iframe_slice(N148EncoderCtx* ctx,
                         if (bx >= cw || by >= chh)
                             continue;
 
-                        if (encode_one_block(&bs, src_uv, recon_uv, ctx->width,
+                            if (encode_one_block(&bs,
+                                             src_uv,
+                                             recon_uv,
+                                             ref_uv,
+                                             ctx->ref_count,
+                                             ctx->width,
                                              cw, chh,
-                                             bx, by, 2, ch, ctx->qp) != 0)
+                                             bx, by, 2, ch,
+                                             ctx->qp,
+                                             ctx->search_range,
+                                             (frame_type == N148_FRAME_P && ctx->ref_count > 0)) != 0)
                             goto fail;
                     }
                 }
@@ -221,6 +389,12 @@ static int encode_iframe_slice(N148EncoderCtx* ctx,
         goto fail;
 
     *out_size = n148_bs_writer_bytes_written(&bs);
+
+    if (ensure_ref_buffers(ctx, y_size, uv_size) != 0)
+        goto fail;
+
+    push_reference_frame(ctx, recon_y, recon_uv, y_size, uv_size);
+
     free(recon_y);
     free(recon_uv);
     return 0;
@@ -241,13 +415,13 @@ static int build_frame_header_payload(const N148EncoderCtx* ctx,
 
     n148_bs_writer_init(&bs, out, out_cap);
 
-    if (n148_bs_write_u8(&bs, N148_FRAME_I) != 0) return -1;
+    if (n148_bs_write_u8(&bs, (uint8_t)((frame_number % ctx->keyint) == 0 ? N148_FRAME_I : N148_FRAME_P)) != 0) return -1;
     if (n148_bs_write_u32be(&bs, frame_number) != 0) return -1;
     if (n148_bs_write_i64be(&bs, pts_hns) != 0) return -1;
     if (n148_bs_write_i64be(&bs, pts_hns) != 0) return -1;
     if (n148_bs_write_u8(&bs, (uint8_t)ctx->qp) != 0) return -1;
     if (n148_bs_write_u16be(&bs, 1) != 0) return -1;
-    if (n148_bs_write_u8(&bs, 0) != 0) return -1;
+    if (n148_bs_write_u8(&bs, (uint8_t)ctx->ref_count) != 0) return -1;
     if (n148_bs_write_u32be(&bs, (uint32_t)frame_data_size) != 0) return -1;
     if (n148_bs_flush(&bs) != 0) return -1;
 
@@ -259,7 +433,10 @@ static int append_raw_nal(uint8_t* out, int out_cap, int* pos,
                           int nal_type,
                           const uint8_t* payload, int payload_size)
 {
-    if (*pos + 4 + payload_size > out_cap)
+    int i, zeros = 0;
+    int worst = 4 + payload_size + payload_size / 2 + 4;
+
+    if (*pos + worst > out_cap)
         return -1;
 
     out[(*pos)++] = 0x00;
@@ -267,14 +444,33 @@ static int append_raw_nal(uint8_t* out, int out_cap, int* pos,
     out[(*pos)++] = 0x01;
     out[(*pos)++] = (uint8_t)(nal_type << 4);
 
-    memcpy(out + *pos, payload, (size_t)payload_size);
-    *pos += payload_size;
+   
+    zeros = 0;
+    for (i = 0; i < payload_size; i++) {
+        if (zeros == 2 && payload[i] <= 3) {
+            if (*pos >= out_cap) return -1;
+            out[(*pos)++] = 0x03;
+            zeros = 0;
+        }
+        if (*pos >= out_cap) return -1;
+        out[(*pos)++] = payload[i];
+        if (payload[i] == 0)
+            zeros++;
+        else
+            zeros = 0;
+    }
+
     return 0;
 }
 
 static int n148_encode_frame_packet(N148EncoderCtx* ctx,
                                     const uint8_t* nv12, int nv12_size)
 {
+
+    int frame_type = ((ctx->frame_number % ctx->keyint) == 0 || !(ctx->ref_count > 0))
+        ? N148_FRAME_I
+        : N148_FRAME_P;
+
     uint8_t* slice_payload = NULL;
     uint8_t* frame_hdr = NULL;
     uint8_t* raw_bs = NULL;
@@ -286,12 +482,13 @@ static int n148_encode_frame_packet(N148EncoderCtx* ctx,
     int raw_size = 0;
     int pkt_cap;
     int pkt_size = 0;
+    int ref_count_for_hdr;
 
     if (nv12_size != ctx->width * ctx->height * 3 / 2)
         return -1;
 
     slice_cap = ctx->width * ctx->height * 12 + 1024;
-    raw_cap = slice_cap + 512 + N148_SEQ_HEADER_SIZE;
+    raw_cap = slice_cap * 2 + 512 + N148_SEQ_HEADER_SIZE;
     pkt_cap = raw_cap + 64;
 
     slice_payload = (uint8_t*)malloc((size_t)slice_cap);
@@ -302,14 +499,23 @@ static int n148_encode_frame_packet(N148EncoderCtx* ctx,
     if (!slice_payload || !frame_hdr || !raw_bs || !pkt)
         goto fail;
 
-    if (encode_iframe_slice(ctx, nv12, slice_payload, slice_cap, &slice_size) != 0)
+    ref_count_for_hdr = ctx->ref_count;
+
+    if (encode_frame_slice(ctx, nv12, frame_type, slice_payload, slice_cap, &slice_size) != 0)
         goto fail;
 
-    if (build_frame_header_payload(ctx, ctx->frame_number,
-                                   ctx->next_pts_hns,
-                                   slice_size,
-                                   frame_hdr, 128, &frame_hdr_size) != 0)
-        goto fail;
+    {
+        int saved = ctx->ref_count;
+        ctx->ref_count = ref_count_for_hdr;
+        if (build_frame_header_payload(ctx, ctx->frame_number,
+                                       ctx->next_pts_hns,
+                                       slice_size,
+                                       frame_hdr, 128, &frame_hdr_size) != 0) {
+            ctx->ref_count = saved;
+            goto fail;
+        }
+        ctx->ref_count = saved;
+    }
 
     if (ctx->frame_number == 0) {
         if (append_raw_nal(raw_bs, raw_cap, &raw_size,
@@ -323,7 +529,8 @@ static int n148_encode_frame_packet(N148EncoderCtx* ctx,
         goto fail;
 
     if (append_raw_nal(raw_bs, raw_cap, &raw_size,
-                       N148_NAL_IDR, slice_payload, slice_size) != 0)
+                (frame_type == N148_FRAME_I) ? N148_NAL_IDR : N148_NAL_SLICE,
+                slice_payload, slice_size) != 0)
         goto fail;
 
     if (n148_packetize(raw_bs, raw_size, pkt, pkt_cap, &pkt_size) != 0 || pkt_size <= 0)
@@ -332,7 +539,7 @@ static int n148_encode_frame_packet(N148EncoderCtx* ctx,
     free(ctx->pending_data);
     ctx->pending_data = pkt;
     ctx->pending_size = pkt_size;
-    ctx->pending_is_keyframe = 1;
+    ctx->pending_is_keyframe = (frame_type == N148_FRAME_I);
     ctx->pending_pts_hns = ctx->next_pts_hns;
     ctx->pending_duration_hns = ctx->frame_duration_hns;
 
@@ -412,6 +619,7 @@ static int n148_create_wrapper(void** out, int width, int height, int fps, int b
 
     n148_seq_header_defaults(&hdr, width, height, fps,
                              N148_PROFILE_MAIN, N148_ENTROPY_CAVLC);
+    hdr.max_ref_frames = 4;
 
     if (n148_seq_header_serialize(&hdr, ctx->codec_private, sizeof(ctx->codec_private)) != N148_SEQ_HEADER_SIZE) {
         free(ctx);
@@ -419,6 +627,14 @@ static int n148_create_wrapper(void** out, int width, int height, int fps, int b
     }
 
     ctx->codec_private_size = N148_SEQ_HEADER_SIZE;
+    ctx->keyint = N148_GOP_KEYINT_DEFAULT;
+    ctx->search_range = 8;
+    ctx->ref_count = 0;
+    ctx->max_refs = 4;
+    ctx->enable_qpel = 1;
+    memset(ctx->ref_y, 0, sizeof(ctx->ref_y));
+    memset(ctx->ref_uv, 0, sizeof(ctx->ref_uv));
+
     *out = ctx;
     return 0;
 }
@@ -469,7 +685,12 @@ static void n148_destroy_wrapper(void* enc)
     N148EncoderCtx* ctx = (N148EncoderCtx*)enc;
     if (!ctx) return;
 
+    int i;
     free(ctx->pending_data);
+    for (i = 0; i < ctx->max_refs; i++) {
+        free(ctx->ref_y[i]);
+        free(ctx->ref_uv[i]);
+    }
     free(ctx);
 }
 
