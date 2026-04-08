@@ -3,9 +3,11 @@
 
 #include <stdint.h>
 
-int n148_motion_compensate(uint8_t* dst, int dst_stride,
-                           const uint8_t* ref, int ref_stride,
+void n148_mc_copy_qpel_4x4(uint8_t* dst_plane, int dst_stride,
+                           const uint8_t* ref_plane, int ref_stride,
                            int width, int height,
-                           int mvx, int mvy);
+                           int dst_bx, int dst_by,
+                           int mvx_q4, int mvy_q4,
+                           int sample_stride, int sample_offset);
 
 #endif

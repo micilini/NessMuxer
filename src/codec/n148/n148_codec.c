@@ -45,7 +45,8 @@ int n148_packetize(const uint8_t* raw_bitstream, int raw_size,
     while (pos + 3 < raw_size) {
         int nal_start;
         int nal_end;
-        int payload_size;
+        int raw_payload_size;
+        int clean_size;
 
         if (!(raw_bitstream[pos] == 0x00 &&
               raw_bitstream[pos + 1] == 0x00 &&
@@ -55,13 +56,21 @@ int n148_packetize(const uint8_t* raw_bitstream, int raw_size,
         }
 
         nal_start = pos + 3;
-        nal_end = nal_start;
+        nal_end = nal_start + 1;
 
         while (nal_end + 2 < raw_size) {
+           
             if (raw_bitstream[nal_end] == 0x00 &&
-                raw_bitstream[nal_end + 1] == 0x00 &&
-                raw_bitstream[nal_end + 2] == 0x01) {
-                break;
+                raw_bitstream[nal_end + 1] == 0x00) {
+                if (raw_bitstream[nal_end + 2] == 0x01) {
+                    break;
+                }
+                if (raw_bitstream[nal_end + 2] == 0x03 &&
+                    nal_end + 3 < raw_size &&
+                    raw_bitstream[nal_end + 3] <= 0x03) {
+                    nal_end += 3;
+                    continue;
+                }
             }
             nal_end++;
         }
@@ -69,19 +78,23 @@ int n148_packetize(const uint8_t* raw_bitstream, int raw_size,
         if (nal_end + 2 >= raw_size)
             nal_end = raw_size;
 
-        payload_size = nal_end - nal_start;
+        raw_payload_size = nal_end - nal_start;
 
-        if (payload_size > 0) {
-            if (written + 4 + payload_size > out_capacity)
+        if (raw_payload_size > 0) {
+            if (written + 4 + raw_payload_size > out_capacity)
                 return -1;
 
-            out[written + 0] = (uint8_t)((payload_size >> 24) & 0xFF);
-            out[written + 1] = (uint8_t)((payload_size >> 16) & 0xFF);
-            out[written + 2] = (uint8_t)((payload_size >> 8) & 0xFF);
-            out[written + 3] = (uint8_t)(payload_size & 0xFF);
+           
+            clean_size = n148_remove_epb(raw_bitstream + nal_start,
+                                         raw_payload_size,
+                                         out + written + 4);
 
-            memcpy(out + written + 4, raw_bitstream + nal_start, (size_t)payload_size);
-            written += 4 + payload_size;
+            out[written + 0] = (uint8_t)((clean_size >> 24) & 0xFF);
+            out[written + 1] = (uint8_t)((clean_size >> 16) & 0xFF);
+            out[written + 2] = (uint8_t)((clean_size >> 8) & 0xFF);
+            out[written + 3] = (uint8_t)(clean_size & 0xFF);
+
+            written += 4 + clean_size;
         }
 
         pos = nal_end;
@@ -115,6 +128,26 @@ int n148_is_keyframe(const uint8_t* data, int size)
     }
 
     return 0;
+}
+
+int n148_remove_epb(const uint8_t* src, int src_size, uint8_t* dst)
+{
+    int i, out = 0, zeros = 0;
+
+    for (i = 0; i < src_size; i++) {
+        if (zeros == 2 && src[i] == 0x03 && i + 1 < src_size && src[i + 1] <= 0x03) {
+           
+            zeros = 0;
+            continue;
+        }
+        dst[out++] = src[i];
+        if (src[i] == 0)
+            zeros++;
+        else
+            zeros = 0;
+    }
+
+    return out;
 }
 
 const NessCodecDesc g_n148_codec_desc = {

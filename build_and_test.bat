@@ -122,7 +122,9 @@ if exist "%RELEASE_DIR%\nessmux_validate.exe" (echo   [OK] nessmux_validate.exe)
 if exist "%RELEASE_DIR%\nessmux_bench.exe"   (echo   [OK] nessmux_bench.exe)   else (echo   [MISSING] nessmux_bench.exe)
 if exist "%RELEASE_DIR%\test_n148_codec.exe"   (echo   [OK] test_n148_codec.exe)   else (echo   [INFO] test_n148_codec.exe - optional)
 if exist "%RELEASE_DIR%\test_n148_mux.exe"     (echo   [OK] test_n148_mux.exe)     else (echo   [INFO] test_n148_mux.exe - optional)
-if exist "%RELEASE_DIR%\test_n148_encoder.exe" (echo   [OK] test_n148_encoder.exe) else (echo   [INFO] test_n148_encoder.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_encoder.exe"       (echo   [OK] test_n148_encoder.exe)       else (echo   [INFO] test_n148_encoder.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_roundtrip.exe"     (echo   [OK] test_n148_roundtrip.exe)     else (echo   [INFO] test_n148_roundtrip.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_interpolation.exe" (echo   [OK] test_n148_interpolation.exe) else (echo   [INFO] test_n148_interpolation.exe - optional)
 echo.
 
 :: =========================================================================
@@ -218,6 +220,28 @@ if %errorlevel% equ 0 (
     set /a PASS_COUNT+=1
 ) else (
     echo [FAIL] test_n148_encoder
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_roundtrip ---
+"%RELEASE_DIR%\test_n148_roundtrip.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_roundtrip
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_roundtrip
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_interpolation ---
+"%RELEASE_DIR%\test_n148_interpolation.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_interpolation
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_interpolation
     set /a FAIL_COUNT+=1
 )
 echo.

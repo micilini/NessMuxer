@@ -8,4 +8,6 @@ int n148_cavlc_write_block(N148BsWriter* bs,
                            const int16_t* qcoeff_zigzag,
                            int coeff_count);
 
+int n148_cavlc_write_mv(N148BsWriter* bs, int mvx, int mvy);
+
 #endif

@@ -19,3 +19,16 @@ int n148_cavlc_write_block(N148BsWriter* bs,
 
     return 0;
 }
+
+int n148_cavlc_write_mv(N148BsWriter* bs, int mvx, int mvy)
+{
+    if (!bs)
+        return -1;
+
+    if (n148_bs_write_se(bs, mvx) != 0)
+        return -1;
+    if (n148_bs_write_se(bs, mvy) != 0)
+        return -1;
+
+    return 0;
+}

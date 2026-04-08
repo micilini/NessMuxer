@@ -216,8 +216,12 @@ if(NESS_USE_N148)
         src/decoder/n148/n148_frame_recon.c
         src/decoder/n148/n148_motion.c
         src/decoder/n148/n148_dpb.c
+        src/common/motion_search.c
+        src/common/interpolation.c
+        src/common/motion_search_qpel.c
         src/encoder/n148/n148_encoder.c
         src/encoder/n148/n148_intra.c
+        src/encoder/n148/n148_inter.c
         src/encoder/n148/n148_transform.c
         src/encoder/n148/n148_quant.c
         src/encoder/n148/n148_entropy_enc_cavlc.c
@@ -225,29 +229,36 @@ if(NESS_USE_N148)
     )
 
     target_sources(test_full_pipeline PRIVATE
-    src/codec/n148/n148_bitstream.c
-    src/codec/n148/n148_codec_private.c
-    src/codec/n148/n148_codec.c
-    src/decoder/n148/n148_parser.c
-    src/decoder/n148/n148_frame_recon.c
-    src/encoder/n148/n148_encoder.c
-    src/encoder/n148/n148_intra.c
-    src/encoder/n148/n148_transform.c
-    src/encoder/n148/n148_quant.c
-    src/encoder/n148/n148_entropy_enc_cavlc.c
-    src/encoder/n148/n148_ratecontrol_basic.c
-)
+        src/codec/n148/n148_bitstream.c
+        src/codec/n148/n148_codec_private.c
+        src/codec/n148/n148_codec.c
+        src/decoder/n148/n148_parser.c
+        src/decoder/n148/n148_frame_recon.c
+        src/common/motion_search.c
+        src/common/interpolation.c
+        src/common/motion_search_qpel.c
+        src/encoder/n148/n148_encoder.c
+        src/encoder/n148/n148_intra.c
+        src/encoder/n148/n148_inter.c
+        src/encoder/n148/n148_transform.c
+        src/encoder/n148/n148_quant.c
+        src/encoder/n148/n148_entropy_enc_cavlc.c
+        src/encoder/n148/n148_ratecontrol_basic.c
+    )
 endif()
 
 add_executable(test_n148_codec
     test/test_n148_codec.c
     src/codec/n148/n148_bitstream.c
     src/codec/n148/n148_codec_private.c
+    src/codec/n148/n148_codec.c
     src/decoder/n148/n148_decoder.c
     src/decoder/n148/n148_parser.c
     src/decoder/n148/n148_frame_recon.c
     src/decoder/n148/n148_motion.c
     src/decoder/n148/n148_dpb.c
+    src/common/interpolation.c
+    src/encoder/n148/n148_quant.c
 )
 target_include_directories(test_n148_codec PRIVATE src)
 
@@ -274,14 +285,47 @@ add_executable(test_n148_encoder
     src/decoder/n148/n148_frame_recon.c
     src/decoder/n148/n148_motion.c
     src/decoder/n148/n148_dpb.c
+    src/common/motion_search.c
+    src/common/interpolation.c
+    src/common/motion_search_qpel.c
     src/encoder/n148/n148_encoder.c
     src/encoder/n148/n148_intra.c
+    src/encoder/n148/n148_inter.c
     src/encoder/n148/n148_transform.c
     src/encoder/n148/n148_quant.c
     src/encoder/n148/n148_entropy_enc_cavlc.c
     src/encoder/n148/n148_ratecontrol_basic.c
 )
 target_include_directories(test_n148_encoder PRIVATE src)
+
+add_executable(test_n148_roundtrip
+    test/test_n148_roundtrip.c
+    src/codec/n148/n148_bitstream.c
+    src/codec/n148/n148_codec_private.c
+    src/codec/n148/n148_codec.c
+    src/decoder/n148/n148_decoder.c
+    src/decoder/n148/n148_parser.c
+    src/decoder/n148/n148_frame_recon.c
+    src/decoder/n148/n148_motion.c
+    src/decoder/n148/n148_dpb.c
+    src/common/motion_search.c
+    src/common/interpolation.c
+    src/common/motion_search_qpel.c
+    src/encoder/n148/n148_encoder.c
+    src/encoder/n148/n148_intra.c
+    src/encoder/n148/n148_inter.c
+    src/encoder/n148/n148_transform.c
+    src/encoder/n148/n148_quant.c
+    src/encoder/n148/n148_entropy_enc_cavlc.c
+    src/encoder/n148/n148_ratecontrol_basic.c
+)
+target_include_directories(test_n148_roundtrip PRIVATE src)
+
+add_executable(test_n148_interpolation
+    test/test_n148_interpolation.c
+    src/common/interpolation.c
+)
+target_include_directories(test_n148_interpolation PRIVATE src)
 
 # ===========================================================================
 # CLI Tools
