@@ -125,6 +125,8 @@ if exist "%RELEASE_DIR%\test_n148_mux.exe"     (echo   [OK] test_n148_mux.exe)  
 if exist "%RELEASE_DIR%\test_n148_encoder.exe"       (echo   [OK] test_n148_encoder.exe)       else (echo   [INFO] test_n148_encoder.exe - optional)
 if exist "%RELEASE_DIR%\test_n148_roundtrip.exe"     (echo   [OK] test_n148_roundtrip.exe)     else (echo   [INFO] test_n148_roundtrip.exe - optional)
 if exist "%RELEASE_DIR%\test_n148_interpolation.exe" (echo   [OK] test_n148_interpolation.exe) else (echo   [INFO] test_n148_interpolation.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_reorder.exe"       (echo   [OK] test_n148_reorder.exe)       else (echo   [INFO] test_n148_reorder.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_gop_planner.exe"   (echo   [OK] test_n148_gop_planner.exe)   else (echo   [INFO] test_n148_gop_planner.exe - optional)
 echo.
 
 :: =========================================================================
@@ -242,6 +244,28 @@ if %errorlevel% equ 0 (
     set /a PASS_COUNT+=1
 ) else (
     echo [FAIL] test_n148_interpolation
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_reorder ---
+"%RELEASE_DIR%\test_n148_reorder.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_reorder
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_reorder
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_gop_planner ---
+"%RELEASE_DIR%\test_n148_gop_planner.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_gop_planner
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_gop_planner
     set /a FAIL_COUNT+=1
 )
 echo.
