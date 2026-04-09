@@ -363,6 +363,17 @@ if %errorlevel% equ 0 (
 )
 echo.
 
+echo --- test_n148_tools ---
+"%RELEASE_DIR%\test_n148_tools.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_tools
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_tools
+    set /a FAIL_COUNT+=1
+)
+echo.
+
 if exist "test_n148_mux.mkv" (
     echo --- nessmux_validate test_n148_mux.mkv ---
     build\Release\nessmux_validate.exe test_n148_mux.mkv

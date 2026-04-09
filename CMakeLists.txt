@@ -461,6 +461,17 @@ add_executable(test_n148_profiles
 )
 target_include_directories(test_n148_profiles PRIVATE src)
 
+# --- FASE 9 tools test ---
+add_executable(test_n148_tools
+    test/test_n148_tools.c
+    ${N148_FULL_SOURCES}
+    src/common/n148_metrics.c
+)
+target_include_directories(test_n148_tools PRIVATE src)
+if(NOT WIN32)
+    target_link_libraries(test_n148_tools PRIVATE m)
+endif()
+
 # ===========================================================================
 # CLI Tools
 # ===========================================================================
@@ -483,3 +494,47 @@ add_executable(nessmux_bench
 )
 target_include_directories(nessmux_bench PRIVATE include)
 target_link_libraries(nessmux_bench PRIVATE NessMuxer)
+
+# --- FASE 9: N.148 toolchain ---
+add_executable(n148dump
+    tools/n148dump.c
+    src/codec/n148/n148_bitstream.c
+    src/codec/n148/n148_codec_private.c
+    src/codec/n148/n148_codec.c
+    src/decoder/n148/n148_parser.c
+    src/buffered_io.c
+)
+target_include_directories(n148dump PRIVATE src)
+
+add_executable(n148inspect
+    tools/n148inspect.c
+    src/codec/n148/n148_bitstream.c
+    src/codec/n148/n148_codec_private.c
+    src/codec/n148/n148_codec.c
+    src/decoder/n148/n148_parser.c
+    src/common/entropy/n148_cavlc.c
+    src/common/entropy/n148_binarization.c
+    src/common/entropy/n148_cabac.c
+    src/common/entropy/n148_cabac_engine.c
+    src/common/entropy/n148_cabac_contexts.c
+    src/common/entropy/n148_cabac_binarization.c
+    src/common/entropy/n148_cabac_syntax.c
+    src/common/entropy/n148_cabac_tables.c
+    src/buffered_io.c
+)
+target_include_directories(n148inspect PRIVATE src)
+
+add_executable(n148diff
+    tools/n148diff.c
+    src/common/n148_metrics.c
+)
+target_include_directories(n148diff PRIVATE src)
+if(NOT WIN32)
+    target_link_libraries(n148diff PRIVATE m)
+endif()
+
+add_executable(n148enc
+    tools/n148enc.c
+    ${N148_FULL_SOURCES}
+)
+target_include_directories(n148enc PRIVATE src)
