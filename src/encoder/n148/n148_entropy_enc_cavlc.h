@@ -1,13 +1,9 @@
 #ifndef NESS_N148_ENTROPY_ENC_CAVLC_H
 #define NESS_N148_ENTROPY_ENC_CAVLC_H
 
-#include "../../codec/n148/n148_bitstream.h"
-#include <stdint.h>
+#include "../../common/entropy/n148_cavlc.h"
 
-int n148_cavlc_write_block(N148BsWriter* bs,
-                           const int16_t* qcoeff_zigzag,
-                           int coeff_count);
-
-int n148_cavlc_write_mv(N148BsWriter* bs, int mvx, int mvy);
+#define n148_cavlc_write_block n148_entropy_cavlc_write_block
+#define n148_cavlc_write_mv    n148_entropy_cavlc_write_mv
 
 #endif

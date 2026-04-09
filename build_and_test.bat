@@ -123,10 +123,15 @@ if exist "%RELEASE_DIR%\nessmux_bench.exe"   (echo   [OK] nessmux_bench.exe)   e
 if exist "%RELEASE_DIR%\test_n148_codec.exe"   (echo   [OK] test_n148_codec.exe)   else (echo   [INFO] test_n148_codec.exe - optional)
 if exist "%RELEASE_DIR%\test_n148_mux.exe"     (echo   [OK] test_n148_mux.exe)     else (echo   [INFO] test_n148_mux.exe - optional)
 if exist "%RELEASE_DIR%\test_n148_encoder.exe"       (echo   [OK] test_n148_encoder.exe)       else (echo   [INFO] test_n148_encoder.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_phase7_epic.exe"   (echo   [OK] test_n148_phase7_epic.exe)   else (echo   [INFO] test_n148_phase7_epic.exe - optional)
 if exist "%RELEASE_DIR%\test_n148_roundtrip.exe"     (echo   [OK] test_n148_roundtrip.exe)     else (echo   [INFO] test_n148_roundtrip.exe - optional)
 if exist "%RELEASE_DIR%\test_n148_interpolation.exe" (echo   [OK] test_n148_interpolation.exe) else (echo   [INFO] test_n148_interpolation.exe - optional)
 if exist "%RELEASE_DIR%\test_n148_reorder.exe"       (echo   [OK] test_n148_reorder.exe)       else (echo   [INFO] test_n148_reorder.exe - optional)
 if exist "%RELEASE_DIR%\test_n148_gop_planner.exe"   (echo   [OK] test_n148_gop_planner.exe)   else (echo   [INFO] test_n148_gop_planner.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_cabac.exe"                    (echo   [OK] test_n148_cabac.exe)                    else (echo   [INFO] test_n148_cabac.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_cabac_engine.exe"             (echo   [OK] test_n148_cabac_engine.exe)             else (echo   [INFO] test_n148_cabac_engine.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_cabac_slice_roundtrip.exe"    (echo   [OK] test_n148_cabac_slice_roundtrip.exe)    else (echo   [INFO] test_n148_cabac_slice_roundtrip.exe - optional)
+if exist "%RELEASE_DIR%\test_n148_cabac_conformance_small.exe"  (echo   [OK] test_n148_cabac_conformance_small.exe)  else (echo   [INFO] test_n148_cabac_conformance_small.exe - optional)
 echo.
 
 :: =========================================================================
@@ -226,6 +231,17 @@ if %errorlevel% equ 0 (
 )
 echo.
 
+echo --- test_n148_phase7_epic ---
+"%RELEASE_DIR%\test_n148_phase7_epic.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_phase7_epic
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_phase7_epic
+    set /a FAIL_COUNT+=1
+)
+echo.
+
 echo --- test_n148_roundtrip ---
 "%RELEASE_DIR%\test_n148_roundtrip.exe"
 if %errorlevel% equ 0 (
@@ -270,13 +286,103 @@ if %errorlevel% equ 0 (
 )
 echo.
 
+echo --- test_n148_cabac ---
+ "%RELEASE_DIR%\test_n148_cabac.exe"
+ if %errorlevel% equ 0 (
+     echo [PASS] test_n148_cabac
+     set /a PASS_COUNT+=1
+ ) else (
+     echo [FAIL] test_n148_cabac
+     set /a FAIL_COUNT+=1
+ )
+ echo.
+ 
+ echo --- test_n148_cabac_engine ---
+ "%RELEASE_DIR%\test_n148_cabac_engine.exe"
+ if %errorlevel% equ 0 (
+     echo [PASS] test_n148_cabac_engine
+     set /a PASS_COUNT+=1
+ ) else (
+     echo [FAIL] test_n148_cabac_engine
+     set /a FAIL_COUNT+=1
+ )
+ echo.
+ 
+ echo --- test_n148_cabac_slice_roundtrip ---
+ "%RELEASE_DIR%\test_n148_cabac_slice_roundtrip.exe"
+ if %errorlevel% equ 0 (
+     echo [PASS] test_n148_cabac_slice_roundtrip
+     set /a PASS_COUNT+=1
+ ) else (
+     echo [FAIL] test_n148_cabac_slice_roundtrip
+     set /a FAIL_COUNT+=1
+ )
+ echo.
+ 
+ echo --- test_n148_cabac_conformance_small ---
+ "%RELEASE_DIR%\test_n148_cabac_conformance_small.exe"
+ if %errorlevel% equ 0 (
+     echo [PASS] test_n148_cabac_conformance_small
+     set /a PASS_COUNT+=1
+ ) else (
+     echo [FAIL] test_n148_cabac_conformance_small
+     set /a FAIL_COUNT+=1
+ )
+ echo.
+
+ echo --- test_n148_ratecontrol ---
+"%RELEASE_DIR%\test_n148_ratecontrol.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_ratecontrol
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_ratecontrol
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_metrics ---
+"%RELEASE_DIR%\test_n148_metrics.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_metrics
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_metrics
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_profiles ---
+"%RELEASE_DIR%\test_n148_profiles.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_profiles
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_profiles
+    set /a FAIL_COUNT+=1
+)
+echo.
+
 if exist "test_n148_mux.mkv" (
     echo --- nessmux_validate test_n148_mux.mkv ---
-    "%RELEASE_DIR%\nessmux_validate.exe" "test_n148_mux.mkv"
-    if %errorlevel% equ 0 (
+    build\Release\nessmux_validate.exe test_n148_mux.mkv
+    if !errorlevel! equ 0 (
         echo [PASS] validate test_n148_mux.mkv
+        set /a PASS_COUNT+=1
     ) else (
         echo [FAIL] validate test_n148_mux.mkv
+        set /a FAIL_COUNT+=1
+    )
+    echo.
+)
+
+if exist "test_n148_mux_cabac.mkv" (
+    echo --- nessmux_validate test_n148_mux_cabac.mkv ---
+    build\Release\nessmux_validate.exe test_n148_mux_cabac.mkv
+    if %errorlevel% equ 0 (
+        echo [PASS] validate test_n148_mux_cabac.mkv
+    ) else (
+        echo [FAIL] validate test_n148_mux_cabac.mkv
     )
     echo.
 )
