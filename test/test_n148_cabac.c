@@ -129,7 +129,7 @@ static int test_block_roundtrip(void)
         FAIL("init_dec");
     if (n148_cabac_read_block(&dec_s, &rd, out_coeffs, &coeff_count, 16) != 0)
         FAIL("read_block");
-    if (coeff_count != 9)
+    if (coeff_count != 5)
         FAIL("coeff_count");
 
     for (i = 0; i < 16; i++) {

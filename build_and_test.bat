@@ -330,6 +330,39 @@ echo --- test_n148_cabac ---
  )
  echo.
 
+ echo --- test_n148_ratecontrol ---
+"%RELEASE_DIR%\test_n148_ratecontrol.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_ratecontrol
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_ratecontrol
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_metrics ---
+"%RELEASE_DIR%\test_n148_metrics.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_metrics
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_metrics
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_profiles ---
+"%RELEASE_DIR%\test_n148_profiles.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_profiles
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_profiles
+    set /a FAIL_COUNT+=1
+)
+echo.
+
 if exist "test_n148_mux.mkv" (
     echo --- nessmux_validate test_n148_mux.mkv ---
     build\Release\nessmux_validate.exe test_n148_mux.mkv

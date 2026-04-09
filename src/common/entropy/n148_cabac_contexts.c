@@ -16,12 +16,11 @@ void n148_cabac_context_set_init_default(N148CabacContextSet* set)
         init_one(&set->ctx[i], N148_CABAC_STATE_NEUTRAL, N148_CABAC_MPS_ZERO);
 
     init_one(&set->ctx[N148_CTX_HAS_RESIDUAL],        22, 0);
-    init_one(&set->ctx[N148_CTX_COEFF_SIG],           20, 0);
-    init_one(&set->ctx[N148_CTX_COEFF_LAST],          26, 0);
-    init_one(&set->ctx[N148_CTX_COEFF_LEVEL_PREFIX],  36, 1);
-    init_one(&set->ctx[N148_CTX_COEFF_LEVEL_SUFFIX],  28, 0);
+    init_one(&set->ctx[N148_CTX_COEFF_SIG],           20, 1); 
+    init_one(&set->ctx[N148_CTX_COEFF_LAST],          16, 0); 
+    init_one(&set->ctx[N148_CTX_COEFF_LEVEL_PREFIX],  28, 0); 
+    init_one(&set->ctx[N148_CTX_COEFF_LEVEL_SUFFIX],  28, 0); 
 
-   
     init_one(&set->ctx[N148_CTX_MVD_X_ZERO],  24, 0);
     init_one(&set->ctx[N148_CTX_MVD_X_GT1],   30, 0);
     init_one(&set->ctx[N148_CTX_MVD_X_GT2],   34, 0);

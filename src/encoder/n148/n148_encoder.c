@@ -17,6 +17,9 @@
 #include "../../codec/n148/n148_codec_private.h"
 #include "../../decoder/n148/n148_frame_recon.h"
 
+#include "n148_ratecontrol.h"
+#include "n148_profiles.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -67,6 +70,9 @@ typedef struct {
     int reorder_delay;
 
     N148ReorderQueue reorder_queue;
+
+    N148RateControl rc_adv;
+    int use_advanced_rc;
 } N148EncoderCtx;
 
 static uint8_t clip_u8(int v)
@@ -447,6 +453,11 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
     N148CabacSession cabac_sess;
     int cabac_active = (ctx->entropy_mode == N148_ENTROPY_CABAC);
 
+   
+    if (ctx->use_advanced_rc) {
+        ctx->qp = n148_rc_get_frame_qp(&ctx->rc_adv, frame_type);
+    }
+
     n148_bs_writer_init(&bs, out_buf, out_cap);
 
     if (n148_bs_write_u16be(&bs, (uint16_t)ctx->width) != 0) goto fail;
@@ -716,6 +727,12 @@ static int n148_encode_frame_packet(N148EncoderCtx* ctx,
 
     pkt = NULL;
 
+   
+    if (ctx->use_advanced_rc) {
+        n148_rc_update(&ctx->rc_adv, frame_type,
+                       pkt_size * 8, (double)(slice_size));
+    }
+
     ctx->next_dts_hns += in_frame->duration_hns;
     ctx->frame_number++;
 
@@ -861,6 +878,34 @@ static int n148_create_wrapper(void** out, int width, int height, int fps, int b
     memset(ctx->ref_y, 0, sizeof(ctx->ref_y));
     memset(ctx->ref_uv, 0, sizeof(ctx->ref_uv));
 
+   
+    ctx->use_advanced_rc = 0;
+    if (bitrate_kbps > 0) {
+        n148_rc_init(&ctx->rc_adv, N148_RC_ABR,
+                     width, height, fps, bitrate_kbps, ctx->qp);
+        ctx->use_advanced_rc = 1;
+        N148_ENC_LOG("advanced RC enabled: ABR target=%dk qp_base=%d",
+                     bitrate_kbps, ctx->qp);
+    }
+
+   
+    {
+        char errbuf[256] = {0};
+        int prof_id = (ctx->entropy_mode == N148_ENTROPY_CABAC)
+            ? N148_PROF_EPIC : N148_PROF_MAIN;
+        if (n148_profile_validate(prof_id,
+                ctx->max_bframes > 0,
+                ctx->entropy_mode == N148_ENTROPY_CABAC,
+                ctx->max_refs,
+                16,
+                ctx->enable_qpel,
+                0, 
+                ctx->reorder_delay,
+                errbuf, sizeof(errbuf)) != 0) {
+            N148_ENC_LOG("WARN: profile violation at create: %s", errbuf);
+        }
+    }
+
     *out = ctx;
     return 0;
 }
@@ -953,6 +998,24 @@ int n148_encoder_set_profile_entropy_for_tests(void* enc, int profile, int entro
                  ctx->entropy_mode,
                  ctx->max_refs,
                  ctx->reorder_delay);
+
+   
+    {
+        char errbuf[256] = {0};
+        int prof_id = (ctx->entropy_mode == N148_ENTROPY_CABAC)
+            ? N148_PROF_EPIC : N148_PROF_MAIN;
+        if (n148_profile_validate(prof_id,
+                ctx->max_bframes > 0,
+                ctx->entropy_mode == N148_ENTROPY_CABAC,
+                ctx->max_refs,
+                16,
+                ctx->enable_qpel,
+                0,
+                ctx->reorder_delay,
+                errbuf, sizeof(errbuf)) != 0) {
+            N148_ENC_LOG("WARN: profile violation after set_profile: %s", errbuf);
+        }
+    }
 
     return 0;
 }
