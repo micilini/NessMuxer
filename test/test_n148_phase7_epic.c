@@ -101,7 +101,7 @@ static void fill_test_frame(uint8_t* nv12, int width, int height, int frame_idx)
         }
     }
 
-    /* bloco claro em movimento */
+   
     {
         int bx = 8 + frame_idx * 6;
         int by = 10 + frame_idx * 3;
@@ -118,7 +118,7 @@ static void fill_test_frame(uint8_t* nv12, int width, int height, int frame_idx)
         }
     }
 
-    /* bloco escuro em movimento oposto */
+   
     {
         int bx = 36 - frame_idx * 4;
         int by = 28 + frame_idx * 2;
@@ -301,7 +301,7 @@ static int run_case(const char* label,
         if (ret == 0) {
             decoded_frames++;
         } else if (ret == 1) {
-            /* frame segurado por reorder */
+           
         } else {
             return 114;
         }

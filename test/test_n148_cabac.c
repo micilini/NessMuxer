@@ -54,29 +54,48 @@ static int test_mv_roundtrip(void)
     uint8_t buf[128] = {0};
     N148BsWriter wr;
     N148BsReader rd;
-    int mvx = 7;
-    int mvy = -3;
+    int mv_pairs[][2] = {
+        { 0, 0 },
+        { 1, 0 },
+        { -1, 0 },
+        { 2, -1 },
+        { 3, 1 },
+        { 4, -3 },
+        { 7, -3 },
+        { 15, -15 },
+        { 33, 2 }
+    };
+    int pair_count = (int)(sizeof(mv_pairs) / sizeof(mv_pairs[0]));
+    int pair_index;
     int mvx_out = 0;
     int mvy_out = 0;
     N148CabacSession enc_s, dec_s;
 
     TEST("CABAC public MV roundtrip");
 
-    n148_bs_writer_init(&wr, buf, (int)sizeof(buf));
-    n148_cabac_session_init_enc(&enc_s);
-    if (n148_cabac_write_mv(&enc_s, &wr, mvx, mvy) != 0)
-        FAIL("write_mv");
-    if (n148_cabac_session_finish_enc(&enc_s, &wr) != 0)
-        FAIL("finish_enc");
-    if (n148_bs_flush(&wr) != 0)
-        FAIL("flush");
+    for (pair_index = 0; pair_index < pair_count; pair_index++) {
+        int mvx = mv_pairs[pair_index][0];
+        int mvy = mv_pairs[pair_index][1];
 
-    n148_bs_reader_init(&rd, buf, n148_bs_writer_bytes_written(&wr));
-    n148_cabac_session_init_dec(&dec_s, &rd);
-    if (n148_cabac_read_mv(&dec_s, &rd, &mvx_out, &mvy_out) != 0)
-        FAIL("read_mv");
-    if (mvx_out != mvx || mvy_out != mvy)
-        FAIL("mv mismatch");
+        memset(buf, 0, sizeof(buf));
+        n148_bs_writer_init(&wr, buf, (int)sizeof(buf));
+        if (n148_cabac_session_init_enc(&enc_s, 2, 28, 0) != 0)
+            FAIL("init_enc");
+        if (n148_cabac_write_mv(&enc_s, &wr, mvx, mvy) != 0)
+            FAIL("write_mv");
+        if (n148_cabac_session_finish_enc(&enc_s, &wr) != 0)
+            FAIL("finish_enc");
+        if (n148_bs_flush(&wr) != 0)
+            FAIL("flush");
+
+        n148_bs_reader_init(&rd, buf, n148_bs_writer_bytes_written(&wr));
+        if (n148_cabac_session_init_dec(&dec_s, &rd, 2, 28, 0) != 0)
+            FAIL("init_dec");
+        if (n148_cabac_read_mv(&dec_s, &rd, &mvx_out, &mvy_out) != 0)
+            FAIL("read_mv");
+        if (mvx_out != mvx || mvy_out != mvy)
+            FAIL("mv mismatch");
+    }
 
     PASS();
     return 0;
@@ -96,7 +115,8 @@ static int test_block_roundtrip(void)
     TEST("CABAC public block roundtrip");
 
     n148_bs_writer_init(&wr, buf, (int)sizeof(buf));
-    n148_cabac_session_init_enc(&enc_s);
+    if (n148_cabac_session_init_enc(&enc_s, 2, 28, 0) != 0)
+        FAIL("init_enc");
     if (n148_cabac_write_block(&enc_s, &wr, in_coeffs, 16) != 0)
         FAIL("write_block");
     if (n148_cabac_session_finish_enc(&enc_s, &wr) != 0)
@@ -105,16 +125,19 @@ static int test_block_roundtrip(void)
         FAIL("flush");
 
     n148_bs_reader_init(&rd, buf, n148_bs_writer_bytes_written(&wr));
-    n148_cabac_session_init_dec(&dec_s, &rd);
+    if (n148_cabac_session_init_dec(&dec_s, &rd, 2, 28, 0) != 0)
+        FAIL("init_dec");
     if (n148_cabac_read_block(&dec_s, &rd, out_coeffs, &coeff_count, 16) != 0)
         FAIL("read_block");
-    if (coeff_count != 16)
+    if (coeff_count != 9)
         FAIL("coeff_count");
 
     for (i = 0; i < 16; i++) {
         if (out_coeffs[i] != in_coeffs[i])
             FAIL("coeff mismatch");
     }
+
+    printf(" [bytes=%d]", n148_bs_writer_bytes_written(&wr));
 
     PASS();
     return 0;
@@ -139,6 +162,49 @@ static int test_core_smoke(void)
     return 0;
 }
 
+static int test_syntax_roundtrip(void)
+{
+    uint8_t buf[256] = {0};
+    N148BsWriter wr;
+    N148BsReader rd;
+    N148CabacSession enc_s, dec_s;
+    uint32_t block_mode = 0, ref_idx = 0, has_residual = 0;
+
+    TEST("CABAC syntax roundtrip");
+
+    n148_bs_writer_init(&wr, buf, (int)sizeof(buf));
+    if (n148_cabac_session_init_enc(&enc_s, 2, 28, 0) != 0)
+        FAIL("init_enc");
+
+    if (n148_cabac_write_block_mode(&enc_s, &wr, 1u) != 0)
+        FAIL("write_block_mode");
+    if (n148_cabac_write_ref_idx(&enc_s, &wr, 2u) != 0)
+        FAIL("write_ref_idx");
+    if (n148_cabac_write_has_residual(&enc_s, &wr, 1u) != 0)
+        FAIL("write_has_residual");
+    if (n148_cabac_session_finish_enc(&enc_s, &wr) != 0)
+        FAIL("finish_enc");
+    if (n148_bs_flush(&wr) != 0)
+        FAIL("flush");
+
+    n148_bs_reader_init(&rd, buf, n148_bs_writer_bytes_written(&wr));
+    if (n148_cabac_session_init_dec(&dec_s, &rd, 2, 28, 0) != 0)
+        FAIL("init_dec");
+
+    if (n148_cabac_read_block_mode(&dec_s, &rd, &block_mode) != 0)
+        FAIL("read_block_mode");
+    if (n148_cabac_read_ref_idx(&dec_s, &rd, &ref_idx) != 0)
+        FAIL("read_ref_idx");
+    if (n148_cabac_read_has_residual(&dec_s, &rd, &has_residual) != 0)
+        FAIL("read_has_residual");
+
+    if (block_mode != 1u || ref_idx != 2u || has_residual != 1u)
+        FAIL("syntax mismatch");
+
+    PASS();
+    return 0;
+}
+
 int main(void)
 {
     int rc = 0;
@@ -149,6 +215,7 @@ int main(void)
     if ((rc = test_mv_roundtrip()) != 0) return 4;
     if ((rc = test_block_roundtrip()) != 0) return 5;
     if ((rc = test_core_smoke()) != 0) return 6;
+    if ((rc = test_syntax_roundtrip()) != 0) return 7;
 
     printf("\n=== Resultado: %d/%d testes passaram ===\n", tests_passed, tests_total);
     return 0;

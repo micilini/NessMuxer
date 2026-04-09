@@ -7,9 +7,9 @@ set(CMAKE_C_STANDARD 11)
 # O backend nativo da plataforma (MF no Windows, VT no macOS) e automatico.
 # ===========================================================================
 
-option(NESS_USE_X264  "Enable libx264 software encoder backend"  OFF)
+option(NESS_USE_X264  "Enable libx264 software encoder backend" OFF)
 option(NESS_USE_NVENC "Enable NVIDIA NVENC hardware encoder backend" OFF)
-option(NESS_USE_N148 "Enable N.148 autoral codec" OFF)
+option(NESS_USE_N148  "Enable N.148 autoral codec" OFF)
 
 # Paths so necessarios no Windows (Linux/macOS usam pkg-config / frameworks)
 set(NESS_X264_INCLUDE_DIR  "" CACHE PATH "Path to x264 headers (Windows only)")
@@ -97,6 +97,51 @@ if(NESS_USE_NVENC)
     endif()
     target_include_directories(NessMuxer PRIVATE ${NESS_NVENC_INCLUDE_DIR})
     target_compile_definitions(NessMuxer PRIVATE NESS_HAVE_NVENC)
+endif()
+
+# ===========================================================================
+# Optional: N.148 codec
+# ETAPA A = reorganizacao fisica do CABAC em modulos dedicados
+# ===========================================================================
+
+if(NESS_USE_N148)
+    target_compile_definitions(NessMuxer PRIVATE NESS_HAVE_N148)
+
+    target_sources(NessMuxer PRIVATE
+        src/codec/n148/n148_bitstream.c
+        src/codec/n148/n148_codec_private.c
+        src/codec/n148/n148_codec.c
+
+        src/decoder/n148/n148_decoder.c
+        src/decoder/n148/n148_parser.c
+        src/decoder/n148/n148_frame_recon.c
+        src/decoder/n148/n148_motion.c
+        src/decoder/n148/n148_dpb.c
+
+        src/common/motion_search.c
+        src/common/interpolation.c
+        src/common/motion_search_qpel.c
+
+        src/common/entropy/n148_binarization.c
+        src/common/entropy/n148_cavlc.c
+
+        # FASE 7R / ETAPA A — CABAC modularizado
+        src/common/entropy/n148_cabac.c
+        src/common/entropy/n148_cabac_engine.c
+        src/common/entropy/n148_cabac_contexts.c
+        src/common/entropy/n148_cabac_binarization.c
+        src/common/entropy/n148_cabac_syntax.c
+        src/common/entropy/n148_cabac_tables.c
+
+        src/encoder/n148/n148_encoder.c
+        src/encoder/n148/n148_intra.c
+        src/encoder/n148/n148_inter.c
+        src/encoder/n148/n148_transform.c
+        src/encoder/n148/n148_quant.c
+        src/encoder/n148/n148_entropy_enc_cavlc.c
+        src/encoder/n148/n148_ratecontrol_basic.c
+        src/encoder/n148/n148_reorder.c
+    )
 endif()
 
 # ===========================================================================
@@ -199,51 +244,32 @@ if(NESS_USE_NVENC)
     target_compile_definitions(test_full_pipeline PRIVATE NESS_HAVE_NVENC)
 endif()
 
-# ---------------------------------------------------------------------------
-# Optional: N.148 codec
-# ---------------------------------------------------------------------------
-
 if(NESS_USE_N148)
-    target_compile_definitions(NessMuxer PRIVATE NESS_HAVE_N148)
     target_compile_definitions(test_full_pipeline PRIVATE NESS_HAVE_N148)
-
-    target_sources(NessMuxer PRIVATE
-        src/codec/n148/n148_bitstream.c
-        src/codec/n148/n148_codec_private.c
-        src/codec/n148/n148_codec.c
-        src/decoder/n148/n148_decoder.c
-        src/decoder/n148/n148_parser.c
-        src/decoder/n148/n148_frame_recon.c
-        src/decoder/n148/n148_motion.c
-        src/decoder/n148/n148_dpb.c
-        src/common/motion_search.c
-        src/common/interpolation.c
-        src/common/motion_search_qpel.c
-        src/common/entropy/n148_binarization.c
-        src/common/entropy/n148_cavlc.c
-        src/common/entropy/n148_cabac.c
-        src/encoder/n148/n148_encoder.c
-        src/encoder/n148/n148_intra.c
-        src/encoder/n148/n148_inter.c
-        src/encoder/n148/n148_transform.c
-        src/encoder/n148/n148_quant.c
-        src/encoder/n148/n148_entropy_enc_cavlc.c
-        src/encoder/n148/n148_ratecontrol_basic.c
-        src/encoder/n148/n148_reorder.c
-    )
 
     target_sources(test_full_pipeline PRIVATE
         src/codec/n148/n148_bitstream.c
         src/codec/n148/n148_codec_private.c
         src/codec/n148/n148_codec.c
+
         src/decoder/n148/n148_parser.c
         src/decoder/n148/n148_frame_recon.c
+
         src/common/motion_search.c
         src/common/interpolation.c
         src/common/motion_search_qpel.c
+
         src/common/entropy/n148_binarization.c
         src/common/entropy/n148_cavlc.c
+
+        # FASE 7R / ETAPA A — CABAC modularizado
         src/common/entropy/n148_cabac.c
+        src/common/entropy/n148_cabac_engine.c
+        src/common/entropy/n148_cabac_contexts.c
+        src/common/entropy/n148_cabac_binarization.c
+        src/common/entropy/n148_cabac_syntax.c
+        src/common/entropy/n148_cabac_tables.c
+
         src/encoder/n148/n148_encoder.c
         src/encoder/n148/n148_intra.c
         src/encoder/n148/n148_inter.c
@@ -254,6 +280,10 @@ if(NESS_USE_N148)
         src/encoder/n148/n148_reorder.c
     )
 endif()
+
+# ===========================================================================
+# N.148 Tests
+# ===========================================================================
 
 add_executable(test_n148_codec
     test/test_n148_codec.c
@@ -269,6 +299,11 @@ add_executable(test_n148_codec
     src/common/entropy/n148_binarization.c
     src/common/entropy/n148_cavlc.c
     src/common/entropy/n148_cabac.c
+    src/common/entropy/n148_cabac_engine.c
+    src/common/entropy/n148_cabac_contexts.c
+    src/common/entropy/n148_cabac_binarization.c
+    src/common/entropy/n148_cabac_syntax.c
+    src/common/entropy/n148_cabac_tables.c
     src/encoder/n148/n148_quant.c
 )
 target_include_directories(test_n148_codec PRIVATE src)
@@ -302,6 +337,11 @@ add_executable(test_n148_encoder
     src/common/entropy/n148_binarization.c
     src/common/entropy/n148_cavlc.c
     src/common/entropy/n148_cabac.c
+    src/common/entropy/n148_cabac_engine.c
+    src/common/entropy/n148_cabac_contexts.c
+    src/common/entropy/n148_cabac_binarization.c
+    src/common/entropy/n148_cabac_syntax.c
+    src/common/entropy/n148_cabac_tables.c
     src/encoder/n148/n148_encoder.c
     src/encoder/n148/n148_intra.c
     src/encoder/n148/n148_inter.c
@@ -333,6 +373,11 @@ add_executable(test_n148_phase7_epic
     src/common/entropy/n148_binarization.c
     src/common/entropy/n148_cavlc.c
     src/common/entropy/n148_cabac.c
+    src/common/entropy/n148_cabac_engine.c
+    src/common/entropy/n148_cabac_contexts.c
+    src/common/entropy/n148_cabac_binarization.c
+    src/common/entropy/n148_cabac_syntax.c
+    src/common/entropy/n148_cabac_tables.c
     src/encoder/n148/n148_encoder.c
     src/encoder/n148/n148_intra.c
     src/encoder/n148/n148_inter.c
@@ -360,6 +405,11 @@ add_executable(test_n148_roundtrip
     src/common/entropy/n148_binarization.c
     src/common/entropy/n148_cavlc.c
     src/common/entropy/n148_cabac.c
+    src/common/entropy/n148_cabac_engine.c
+    src/common/entropy/n148_cabac_contexts.c
+    src/common/entropy/n148_cabac_binarization.c
+    src/common/entropy/n148_cabac_syntax.c
+    src/common/entropy/n148_cabac_tables.c
     src/encoder/n148/n148_encoder.c
     src/encoder/n148/n148_intra.c
     src/encoder/n148/n148_inter.c
@@ -405,6 +455,11 @@ add_executable(test_n148_cabac
     src/common/entropy/n148_binarization.c
     src/common/entropy/n148_cavlc.c
     src/common/entropy/n148_cabac.c
+    src/common/entropy/n148_cabac_engine.c
+    src/common/entropy/n148_cabac_contexts.c
+    src/common/entropy/n148_cabac_binarization.c
+    src/common/entropy/n148_cabac_syntax.c
+    src/common/entropy/n148_cabac_tables.c
     src/encoder/n148/n148_encoder.c
     src/encoder/n148/n148_intra.c
     src/encoder/n148/n148_inter.c
@@ -414,7 +469,85 @@ add_executable(test_n148_cabac
     src/encoder/n148/n148_ratecontrol_basic.c
     src/encoder/n148/n148_reorder.c
 )
-target_include_directories(test_n148_cabac PRIVATE src src/common/entropy src/codec/n148 src/decoder/n148 src/encoder/n148)
+target_include_directories(test_n148_cabac PRIVATE
+    src
+    src/common/entropy
+    src/codec/n148
+    src/decoder/n148
+    src/encoder/n148
+)
+
+add_executable(test_n148_cabac_engine
+    test/test_n148_cabac_engine.c
+    src/common/entropy/n148_cabac_engine.c
+    src/common/entropy/n148_cabac_tables.c
+    src/codec/n148/n148_bitstream.c
+)
+target_include_directories(test_n148_cabac_engine PRIVATE src)
+
+add_executable(test_n148_cabac_slice_roundtrip
+    test/test_n148_cabac_slice_roundtrip.c
+    src/codec/n148/n148_bitstream.c
+    src/codec/n148/n148_codec_private.c
+    src/codec/n148/n148_codec.c
+    src/decoder/n148/n148_decoder.c
+    src/decoder/n148/n148_parser.c
+    src/decoder/n148/n148_frame_recon.c
+    src/decoder/n148/n148_motion.c
+    src/decoder/n148/n148_dpb.c
+    src/common/interpolation.c
+    src/common/motion_search.c
+    src/common/motion_search_qpel.c
+    src/common/entropy/n148_binarization.c
+    src/common/entropy/n148_cavlc.c
+    src/common/entropy/n148_cabac.c
+    src/common/entropy/n148_cabac_engine.c
+    src/common/entropy/n148_cabac_contexts.c
+    src/common/entropy/n148_cabac_binarization.c
+    src/common/entropy/n148_cabac_syntax.c
+    src/common/entropy/n148_cabac_tables.c
+    src/encoder/n148/n148_encoder.c
+    src/encoder/n148/n148_intra.c
+    src/encoder/n148/n148_inter.c
+    src/encoder/n148/n148_transform.c
+    src/encoder/n148/n148_quant.c
+    src/encoder/n148/n148_entropy_enc_cavlc.c
+    src/encoder/n148/n148_ratecontrol_basic.c
+    src/encoder/n148/n148_reorder.c
+)
+target_include_directories(test_n148_cabac_slice_roundtrip PRIVATE src)
+
+add_executable(test_n148_cabac_conformance_small
+    test/test_n148_cabac_conformance_small.c
+    src/codec/n148/n148_bitstream.c
+    src/codec/n148/n148_codec_private.c
+    src/codec/n148/n148_codec.c
+    src/decoder/n148/n148_decoder.c
+    src/decoder/n148/n148_parser.c
+    src/decoder/n148/n148_frame_recon.c
+    src/decoder/n148/n148_motion.c
+    src/decoder/n148/n148_dpb.c
+    src/common/interpolation.c
+    src/common/motion_search.c
+    src/common/motion_search_qpel.c
+    src/common/entropy/n148_binarization.c
+    src/common/entropy/n148_cavlc.c
+    src/common/entropy/n148_cabac.c
+    src/common/entropy/n148_cabac_engine.c
+    src/common/entropy/n148_cabac_contexts.c
+    src/common/entropy/n148_cabac_binarization.c
+    src/common/entropy/n148_cabac_syntax.c
+    src/common/entropy/n148_cabac_tables.c
+    src/encoder/n148/n148_encoder.c
+    src/encoder/n148/n148_intra.c
+    src/encoder/n148/n148_inter.c
+    src/encoder/n148/n148_transform.c
+    src/encoder/n148/n148_quant.c
+    src/encoder/n148/n148_entropy_enc_cavlc.c
+    src/encoder/n148/n148_ratecontrol_basic.c
+    src/encoder/n148/n148_reorder.c
+)
+target_include_directories(test_n148_cabac_conformance_small PRIVATE src)
 
 # ===========================================================================
 # CLI Tools

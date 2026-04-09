@@ -320,19 +320,31 @@ static int encode_one_block(N148BsWriter* bs,
         }
     }
 
-    if (n148_bs_write_ue(bs, (uint32_t)final_mode) != 0)
-        return -1;
-
-    if (final_mode == 2) {
-        if (n148_bs_write_ue(bs, (uint32_t)intra_mode) != 0)
+    if (entropy_mode == N148_ENTROPY_CABAC) {
+        if (n148_cabac_write_block_mode(cabac_session, bs, (uint32_t)final_mode) != 0)
             return -1;
     } else {
-        if (n148_bs_write_ue(bs, (uint32_t)ref_idx) != 0)
+        if (n148_bs_write_ue(bs, (uint32_t)final_mode) != 0)
             return -1;
+    }
+
+    if (final_mode == 2) {
         if (entropy_mode == N148_ENTROPY_CABAC) {
+            if (n148_cabac_write_intra_mode(cabac_session, bs, (uint32_t)intra_mode) != 0)
+                return -1;
+        } else {
+            if (n148_bs_write_ue(bs, (uint32_t)intra_mode) != 0)
+                return -1;
+        }
+    } else {
+        if (entropy_mode == N148_ENTROPY_CABAC) {
+            if (n148_cabac_write_ref_idx(cabac_session, bs, (uint32_t)ref_idx) != 0)
+                return -1;
             if (n148_cabac_write_mv(cabac_session, bs, mvx_q4, mvy_q4) != 0)
                 return -1;
         } else {
+            if (n148_bs_write_ue(bs, (uint32_t)ref_idx) != 0)
+                return -1;
             if (n148_entropy_cavlc_write_mv(bs, mvx_q4, mvy_q4) != 0)
                 return -1;
         }
@@ -352,19 +364,28 @@ static int encode_one_block(N148BsWriter* bs,
     coeff_count = n148_quantize_4x4(coeff, qzigzag, qp);
 
     if (coeff_count <= 0) {
-        if (n148_bs_write_bits(bs, 1, 0) != 0)
-            return -1;
+        if (entropy_mode == N148_ENTROPY_CABAC) {
+            if (n148_cabac_write_has_residual(cabac_session, bs, 0u) != 0)
+                return -1;
+        } else {
+            if (n148_bs_write_bits(bs, 1, 0) != 0)
+                return -1;
+        }
 
         memcpy(recon_u8, pred, sizeof(recon_u8));
     } else {
-        if (n148_bs_write_bits(bs, 1, 1) != 0)
-            return -1;
-        if (n148_bs_write_se(bs, 0) != 0)
-            return -1;
         if (entropy_mode == N148_ENTROPY_CABAC) {
+            if (n148_cabac_write_has_residual(cabac_session, bs, 1u) != 0)
+                return -1;
+            if (n148_cabac_write_qp_delta(cabac_session, bs, 0) != 0)
+                return -1;
             if (n148_cabac_write_block(cabac_session, bs, qzigzag, coeff_count) != 0)
                 return -1;
         } else {
+            if (n148_bs_write_bits(bs, 1, 1) != 0)
+                return -1;
+            if (n148_bs_write_se(bs, 0) != 0)
+                return -1;
             if (n148_entropy_cavlc_write_block(bs, qzigzag, coeff_count) != 0)
                 return -1;
         }
@@ -432,8 +453,10 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
     if (n148_bs_write_u16be(&bs, (uint16_t)ctx->height) != 0) goto fail;
     if (n148_bs_write_u8(&bs, (uint8_t)frame_type) != 0) goto fail;
 
-    if (cabac_active)
-        n148_cabac_session_init_enc(&cabac_sess);
+    if (cabac_active) {
+        if (n148_cabac_session_init_enc(&cabac_sess, frame_type, ctx->qp, 0) != 0)
+            goto fail;
+    }
 
     for (mb_y = 0; mb_y < mb_rows; mb_y++) {
         for (mb_x = 0; mb_x < mb_cols; mb_x++) {
