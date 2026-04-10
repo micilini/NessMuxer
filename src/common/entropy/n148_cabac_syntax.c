@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 #ifndef N148_CABAC_TRACE
-#define N148_CABAC_TRACE 1
+#define N148_CABAC_TRACE 0
 #endif
 
 #if N148_CABAC_TRACE

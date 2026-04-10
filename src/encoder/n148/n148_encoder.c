@@ -845,13 +845,23 @@ static int n148_create_wrapper(void** out, int width, int height, int fps, int b
     ctx->profile = N148_PROFILE_MAIN;
     ctx->entropy_mode = N148_ENTROPY_CAVLC;
 
+    ctx->keyint = N148_GOP_KEYINT_DEFAULT;
+    ctx->search_range = 8;
+    ctx->ref_count = 0;
+    ctx->max_refs = 1;
+    ctx->enable_qpel = 1;
+
+    ctx->max_bframes = 0;
+    ctx->reorder_delay = 0;
+
     N148_ENC_LOG("create: %dx%d fps=%d bitrate=%dk profile=%d entropy=%d",
-                 width, height, fps, bitrate_kbps,
-                 ctx->profile, ctx->entropy_mode);
+                width, height, fps, bitrate_kbps,
+                ctx->profile, ctx->entropy_mode);
 
     n148_seq_header_defaults(&hdr, width, height, fps,
-                             ctx->profile, ctx->entropy_mode);
-    hdr.max_ref_frames = 4;
+                            ctx->profile, ctx->entropy_mode);
+    hdr.max_ref_frames = (uint8_t)ctx->max_refs;
+    hdr.max_reorder_depth = (uint8_t)ctx->reorder_delay;
 
     if (n148_seq_header_serialize(&hdr, ctx->codec_private, sizeof(ctx->codec_private)) != N148_SEQ_HEADER_SIZE) {
         free(ctx);
@@ -859,15 +869,7 @@ static int n148_create_wrapper(void** out, int width, int height, int fps, int b
     }
 
     ctx->codec_private_size = N148_SEQ_HEADER_SIZE;
-    ctx->keyint = N148_GOP_KEYINT_DEFAULT;
 
-    ctx->search_range = 8;
-    ctx->ref_count = 0;
-    ctx->max_refs = 4;
-    ctx->enable_qpel = 1;
-
-    ctx->max_bframes = 1;
-    ctx->reorder_delay = ctx->max_bframes;
     ctx->out_queue_head = 0;
     ctx->out_queue_tail = 0;
     ctx->out_queue_count = 0;

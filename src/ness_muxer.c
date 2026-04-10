@@ -2,6 +2,11 @@
 #include "encoder/encoder.h"
 #include "mkv_muxer.h"
 
+#ifdef NESS_HAVE_N148
+#include "encoder/n148/n148_encoder.h"
+#include "codec/n148/n148_spec.h"
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -149,6 +154,21 @@ NESS_API int ness_muxer_open(NessMuxer** out_muxer, const NessMuxerConfig* confi
         free(m);
         return NESS_ERROR_ENCODER;
     }
+
+#ifdef NESS_HAVE_N148
+    if (enc_type == NESS_ENCODER_N148 && config->entropy_mode != 0) {
+        int profile = (config->entropy_mode == NESS_ENTROPY_CABAC) 
+                      ? N148_PROFILE_EPIC : N148_PROFILE_MAIN;
+        int entropy = (config->entropy_mode == NESS_ENTROPY_CABAC)
+                      ? N148_ENTROPY_CABAC : N148_ENTROPY_CAVLC;
+        if (n148_encoder_set_profile_entropy_for_tests(m->encoder_ctx, profile, entropy) != 0) {
+            set_error(m, "failed to set entropy mode");
+            m->encoder_vtable->destroy(m->encoder_ctx);
+            free(m);
+            return NESS_ERROR_ENCODER;
+        }
+    }
+#endif
 
     *out_muxer = m;
     return NESS_OK;

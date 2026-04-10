@@ -1,92 +1,91 @@
-# N.148 CABAC Spec v0.1
+# N.148 CABAC Specification — v0.1
 
-## Objetivo
+## Purpose
 
-Definir a primeira mini-spec operacional do CABAC do N.148 para permitir implementação consistente entre encoder e decoder.
+Define the first operational mini-spec for N.148 CABAC to enable consistent implementation between encoder and decoder.
 
-Este documento não tenta copiar H.264 bit a bit.
-Ele define as regras internas do N.148 para que o subsistema CABAC tenha contrato estável.
-
----
-
-## 1. Escopo desta versão
-
-Esta v0.1 cobre:
-- engine CABAC de referência em C
-- contexts iniciais por classe de sintaxe
-- binarização usada pelos primeiros syntax elements públicos
-- ciclo de vida por slice
-- regras de encode/decode para blocos 4x4 e motion vectors
-
-Esta v0.1 ainda não cobre de forma final:
-- tuning fino de compressão
-- tabela avançada de init por QP
-- contexts especializados para todos os blocos futuros
-- otimizações por arquitetura
+This document does not attempt to copy H.264 bit-for-bit. It defines the internal rules for N.148 so that the CABAC subsystem has a stable contract.
 
 ---
 
-## 2. Princípio de arquitetura
+## 1. Scope of this Version
 
-A pilha CABAC do N.148 é dividida em cinco camadas:
+This v0.1 covers:
+- Reference CABAC engine in C
+- Initial contexts per syntax class
+- Binarization used by the first public syntax elements
+- Per-slice lifecycle
+- Encode/decode rules for 4x4 blocks and motion vectors
 
-1. **engine**
-- `low`
-- `range`
-- `code`
-- renormalização
-- bypass
-- término
-
-2. **contexts**
-- estado inicial
-- MPS inicial
-- evolução de estado
-
-3. **binarização**
-- unary
-- signed magnitude
-- extensível para truncated unary, fixed-length e mapeamentos futuros
-
-4. **syntax layer**
-- MVD / MV públicos
-- coeff_count
-- coeff levels
-
-5. **slice lifecycle**
-- init por slice
-- consumo sequencial
-- finish/terminate no final do slice
+This v0.1 does not yet cover in final form:
+- Fine compression tuning
+- Advanced init table per QP
+- Specialized contexts for all future blocks
+- Architecture-specific optimizations
 
 ---
 
-## 3. Ordem de sintaxe dentro do slice
+## 2. Architecture Principle
 
-### 3.1 Ordem macro de cada bloco
+The N.148 CABAC stack is divided into five layers:
 
-Para cada bloco 4x4 do N.148:
+1. **Engine**
+   - `low`
+   - `range`
+   - `code`
+   - renormalization
+   - bypass
+   - termination
 
-1. `block_mode` (fora do escopo CABAC v0.1; segue caminho atual do bitstream principal)
-2. `intra_mode` ou `ref_idx` (fora do escopo CABAC v0.1; segue caminho atual do bitstream principal)
-3. `mvx`, `mvy` quando bloco for inter e entropy = CABAC
-4. `has_residual` (fora do escopo CABAC v0.1; segue caminho atual do bitstream principal)
-5. `qp_delta` (fora do escopo CABAC v0.1; hoje permanece no path raw)
-6. `coeff_count` quando houver residual e entropy = CABAC
-7. `coeff_level[i]` para `i = 0 .. coeff_count - 1`
+2. **Contexts**
+   - initial state
+   - initial MPS
+   - state evolution
 
-### 3.2 Ordem dos motion vectors
+3. **Binarization**
+   - unary
+   - signed magnitude
+   - extensible to truncated unary, fixed-length, and future mappings
 
-Motion vector CABAC é escrito sempre em:
+4. **Syntax Layer**
+   - MVD / public MV
+   - coeff_count
+   - coeff levels
+
+5. **Slice Lifecycle**
+   - per-slice init
+   - sequential consumption
+   - finish/terminate at slice end
+
+---
+
+## 3. Syntax Order within Slice
+
+### 3.1 Macro Order for Each Block
+
+For each N.148 4x4 block:
+
+1. `block_mode` (outside CABAC v0.1 scope; follows current main bitstream path)
+2. `intra_mode` or `ref_idx` (outside CABAC v0.1 scope; follows current main bitstream path)
+3. `mvx`, `mvy` when block is inter and entropy = CABAC
+4. `has_residual` (outside CABAC v0.1 scope; follows current main bitstream path)
+5. `qp_delta` (outside CABAC v0.1 scope; currently remains in raw path)
+6. `coeff_count` when there is residual and entropy = CABAC
+7. `coeff_level[i]` for `i = 0 .. coeff_count - 1`
+
+### 3.2 Motion Vector Order
+
+CABAC motion vector is always written in:
 - `mvx`
 - `mvy`
 
-Cada componente é independente.
+Each component is independent.
 
 ---
 
-## 4. Context classes
+## 4. Context Classes
 
-### 4.1 IDs de contexto usados nesta versão
+### 4.1 Context IDs Used in this Version
 
 - `N148_CTX_BLOCK_MODE`
 - `N148_CTX_MV_X`
@@ -96,92 +95,92 @@ Cada componente é independente.
 - `N148_CTX_COEFF_SIG`
 - `N148_CTX_COEFF_MAG`
 
-### 4.2 Política inicial v0.1
+### 4.2 Initial Policy v0.1
 
-Na v0.1, todos os contexts começam em estado neutro.
+In v0.1, all contexts start in neutral state.
 
-Estado inicial:
+Initial state:
 - `state = 32`
-- `mps = 0` para sinais/sig flags
-- `mps = 1` para magnitudes/contagens quando a modelagem atual exigir terminador baseado em 1
+- `mps = 0` for sign/sig flags
+- `mps = 1` for magnitudes/counts when current modeling requires 1-based terminator
 
-### 4.3 Política futura
+### 4.3 Future Policy
 
-Nas próximas versões, o init poderá variar por:
+In future versions, init may vary by:
 - profile
 - frame type
-- qp base
+- base qp
 - slice class
 
-Mas isso ainda não entra na v0.1 de implementação.
+But this does not enter v0.1 implementation yet.
 
 ---
 
-## 5. Binarização
+## 5. Binarization
 
-### 5.1 Unary contextual
+### 5.1 Contextual Unary
 
-Uso atual:
+Current use:
 - `coeff_count`
-- magnitude menos 1
+- magnitude minus 1
 
-Regra:
-- escrever `value` zeros seguidos de um bin final `1`
-- o decoder lê até encontrar `1`
+Rule:
+- write `value` zeros followed by a final bin `1`
+- decoder reads until finding `1`
 
-### 5.2 Signed magnitude contextual
+### 5.2 Contextual Signed Magnitude
 
-Uso atual:
+Current use:
 - `mvx`
 - `mvy`
 - `coeff_level`
 
-Regra:
-- bin de significância
-- bin de sinal
-- magnitude menos 1 codificada com unary contextual
+Rule:
+- significance bin
+- sign bin
+- magnitude minus 1 coded with contextual unary
 
-Convenções:
-- valor `0` -> apenas `sig = 0`
-- valor não-zero -> `sig = 1`, depois `sign`, depois `mag-1`
-
----
-
-## 6. Slice lifecycle
-
-### 6.1 Início do slice CABAC
-
-Quando `entropy_mode == N148_ENTROPY_CABAC`:
-- inicializar `N148CabacSession`
-- inicializar `core`
-- inicializar `context set`
-
-### 6.2 Durante o slice
-
-- todos os syntax elements pertencentes ao path CABAC devem ser consumidos em ordem estável
-- não é permitido fazer leitura “peek” de campos que pertençam ao próprio fluxo CABAC sem API explícita do subsistema
-- o estado do engine não pode ser “restaurado” por manipulação crua de `byte_pos/bit_pos`
-
-### 6.3 Final do slice
-
-- chamar `n148_cabac_session_finish_enc()` no encoder
-- o decoder consome o que foi escrito pelo encoder naturalmente, sem flush artificial adicional
+Conventions:
+- value `0` -> only `sig = 0`
+- non-zero value -> `sig = 1`, then `sign`, then `mag-1`
 
 ---
 
-## 7. Regras operacionais desta fase
+## 6. Slice Lifecycle
 
-1. Primeiro a implementação de referência em C
-2. Depois testes isolados por camada
-3. Só depois correção do pipeline épico
-4. Só depois tuning de compressão
-5. Assembly apenas após estabilidade comprovada
+### 6.1 CABAC Slice Start
+
+When `entropy_mode == N148_ENTROPY_CABAC`:
+- initialize `N148CabacSession`
+- initialize `core`
+- initialize `context set`
+
+### 6.2 During Slice
+
+- all syntax elements belonging to the CABAC path must be consumed in stable order
+- "peek" reading of fields belonging to the CABAC stream itself is not permitted without explicit subsystem API
+- engine state cannot be "restored" by raw manipulation of `byte_pos/bit_pos`
+
+### 6.3 Slice End
+
+- call `n148_cabac_session_finish_enc()` in encoder
+- decoder naturally consumes what was written by encoder, without additional artificial flush
 
 ---
 
-## 8. Critério de aceite desta spec
+## 7. Operational Rules for this Phase
 
-A spec v0.1 é considerada suficiente quando:
-- encoder e decoder deixam de “adivinhar” a ordem dos elementos
-- engine, contexts, binarização e sintaxe podem ser testados separadamente
-- a equipe consegue implementar a FASE 7R.3 sem redefinir a arquitetura
+1. First the reference implementation in C
+2. Then isolated tests per layer
+3. Only then epic pipeline correction
+4. Only then compression tuning
+5. Assembly only after proven stability
+
+---
+
+## 8. Acceptance Criteria for this Spec
+
+The v0.1 spec is considered sufficient when:
+- encoder and decoder stop "guessing" element order
+- engine, contexts, binarization, and syntax can be tested separately
+- the team can implement PHASE 7R.3 without redefining the architecture

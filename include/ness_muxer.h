@@ -1,4 +1,3 @@
-
 #ifndef NESS_MUXER_H
 #define NESS_MUXER_H
 
@@ -36,6 +35,11 @@ typedef enum {
     NESS_CODEC_N148 = 148
 } NessCodecType;
 
+typedef enum {
+    NESS_ENTROPY_CAVLC = 0,
+    NESS_ENTROPY_CABAC = 1
+} NessEntropyMode;
+
 typedef struct {
     const char* output_path;    
     int         width;          
@@ -44,6 +48,7 @@ typedef struct {
     int         bitrate_kbps;   
     int         encoder_type;   
     int         codec_type;
+    int         entropy_mode;   /* 0=CAVLC(default), 1=CABAC */
 } NessMuxerConfig;
 
 
