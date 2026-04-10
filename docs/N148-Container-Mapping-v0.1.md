@@ -1,70 +1,77 @@
 # N.148 Container Mapping — Matroska (MKV) — v0.1
 
 **Status:** Draft
-**Data:** 2026-04
+**Date:** 2026-04
 
 ---
 
-## 1. Visão Geral
+## 1. Overview
 
-O codec N.148 é encapsulado dentro do container Matroska (.mkv) usando
-o mapeamento definido neste documento.
+The N.148 codec is encapsulated within the Matroska (.mkv) container using the mapping defined in this document.
 
 ---
 
 ## 2. Track Entry
 
 ### 2.1 CodecID
+
+```
 V_NESS/N148
+```
 
 ### 2.2 CodecPrivate
 
-O campo `CodecPrivate` do TrackEntry contém o **Sequence Header** do N.148
-serializado em formato binário (32 bytes, conforme a Bitstream Spec seção 3).
+The `CodecPrivate` field of the TrackEntry contains the **Sequence Header** of N.148 serialized in binary format (32 bytes, as per Bitstream Spec section 3).
 
 ### 2.3 TrackType
+
+```
 TrackType = 1 (video)
+```
 
 ### 2.4 FlagLacing
-FlagLacing = 0 (desabilitado)
+
+```
+FlagLacing = 0 (disabled)
+```
 
 ---
 
 ## 3. SimpleBlock Format
 
-Cada `SimpleBlock` do Matroska contém um frame N.148 completo.
+Each Matroska `SimpleBlock` contains one complete N.148 frame.
 
-### 3.1 Empacotamento
+### 3.1 Packaging
 
-Dentro do SimpleBlock, os NAL units do N.148 são encapsulados com
-**length prefix de 4 bytes** (big-endian), sem start codes:
+Inside the SimpleBlock, N.148 NAL units are encapsulated with a **4-byte length prefix** (big-endian), without start codes:
+
+```
 [nal_length: 4 bytes BE] [nal_data: N bytes]
 [nal_length: 4 bytes BE] [nal_data: N bytes]
 ...
+```
 
-Ou seja, o mesmo formato "mp4-style" usado pelo AVC dentro do MKV,
-mas com NALs do N.148.
+This is the same "mp4-style" format used by AVC inside MKV, but with N.148 NALs.
 
 ### 3.2 Keyframe Flag
 
-O bit de keyframe do SimpleBlock header é definido como `1` quando o frame
-é do tipo I (IDR). Frames P e B têm keyframe = 0.
+The keyframe bit in the SimpleBlock header is set to `1` when the frame is type I (IDR). P and B frames have keyframe = 0.
 
 ### 3.3 Timestamps
 
-Os timestamps do MKV são em milissegundos (conforme TimestampScale = 1000000).
-O muxer converte de HNS (100-nanosecond intervals) para ms ao escrever.
+MKV timestamps are in milliseconds (as per TimestampScale = 1000000). The muxer converts from HNS (100-nanosecond intervals) to ms when writing.
 
 ---
 
 ## 4. Cues
 
-Cue points são gerados para cada keyframe (I-frame), apontando para o
-início do cluster que contém o frame.
+Cue points are generated for each keyframe (I-frame), pointing to the start of the cluster containing the frame.
 
 ---
 
-## 5. Exemplo de Estrutura
+## 5. Structure Example
+
+```
 EBML Header
 Segment
 ├── SeekHead
@@ -86,14 +93,14 @@ Segment
 ├── Cluster (Timestamp: 1000)
 │   └── ...
 └── Cues
-├── CuePoint (Time=0, Track=1, ClusterPosition=...)
-└── CuePoint (Time=1000, ...)
+    ├── CuePoint (Time=0, Track=1, ClusterPosition=...)
+    └── CuePoint (Time=1000, ...)
+```
 
 ---
 
-## 6. Compatibilidade
+## 6. Compatibility
 
-- **mkvinfo**: mostrará o codec como desconhecido, mas a estrutura EBML
-  será válida e navegável.
-- **ffprobe**: reportará codec desconhecido `V_NESS/N148`.
-- **Players**: não reproduzirão sem suporte ao codec N.148 (esperado).
+- **mkvinfo**: Will show the codec as unknown, but the EBML structure will be valid and navigable.
+- **ffprobe**: Will report unknown codec `V_NESS/N148`.
+- **Players**: Will not play without N.148 codec support (expected).

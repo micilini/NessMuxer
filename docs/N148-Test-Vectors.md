@@ -1,84 +1,84 @@
 # N.148 Test Vectors — v0.1
 
 **Status:** Draft
-**Data:** 2026-04
+**Date:** 2026-04
 
 ---
 
-## 1. Formato dos Test Vectors
+## 1. Test Vector Format
 
-Cada test vector consiste em:
+Each test vector consists of:
 
-| Arquivo              | Descrição                                    |
-|----------------------|----------------------------------------------|
-| `<name>.nv12`        | Frames de entrada em formato NV12 raw        |
-| `<name>.n148`        | Bitstream N.148 raw (NALs com start codes)   |
-| `<name>.mkv`         | Bitstream muxado em Matroska                 |
-| `<name>.decoded.nv12`| Saída decodificada para comparação           |
+| File              | Description                                  |
+|-------------------|----------------------------------------------|
+| `<n>.nv12`        | Input frames in raw NV12 format              |
+| `<n>.n148`        | Raw N.148 bitstream (NALs with start codes)  |
+| `<n>.mkv`         | Bitstream muxed in Matroska                  |
+| `<n>.decoded.nv12`| Decoded output for comparison                |
 
 ---
 
-## 2. Vetores Planejados
+## 2. Planned Vectors
 
 ### 2.1 TV-001: Flat Gray (Intra-Only)
 
-- **Resolução:** 64×48
+- **Resolution:** 64×48
 - **Frames:** 1
 - **Profile:** Main
-- **Conteúdo:** Frame inteiro com Y=128, U=128, V=128
-- **Propósito:** Validar DC prediction puro, caso mais simples possível
-- **Critério:** decoded == original (bit-exato)
+- **Content:** Entire frame with Y=128, U=128, V=128
+- **Purpose:** Validate pure DC prediction, simplest possible case
+- **Criteria:** decoded == original (bit-exact)
 
 ### 2.2 TV-002: Color Bars (Intra-Only)
 
-- **Resolução:** 128×96
+- **Resolution:** 128×96
 - **Frames:** 1
 - **Profile:** Main
-- **Conteúdo:** Barras de cor verticais (8 barras: branco, amarelo, ciano,
-  verde, magenta, vermelho, azul, preto)
-- **Propósito:** Validar modos intra com bordas nítidas
-- **Critério:** PSNR ≥ 40dB (com QP=10)
+- **Content:** Vertical color bars (8 bars: white, yellow, cyan, green, magenta, red, blue, black)
+- **Purpose:** Validate intra modes with sharp edges
+- **Criteria:** PSNR ≥ 40dB (with QP=10)
 
 ### 2.3 TV-003: Gradient (Intra-Only)
 
-- **Resolução:** 320×240
+- **Resolution:** 320×240
 - **Frames:** 1
 - **Profile:** Main
-- **Conteúdo:** Gradiente diagonal Y=f(x,y), UV constante
-- **Propósito:** Validar predição planar e horizontal/vertical
-- **Critério:** PSNR ≥ 35dB (com QP=20)
+- **Content:** Diagonal gradient Y=f(x,y), constant UV
+- **Purpose:** Validate planar and horizontal/vertical prediction
+- **Criteria:** PSNR ≥ 35dB (with QP=20)
 
 ### 2.4 TV-004: Multi-Frame Intra (Intra-Only)
 
-- **Resolução:** 160×120
+- **Resolution:** 160×120
 - **Frames:** 30
 - **Profile:** Main
-- **Conteúdo:** Padrão NV12 sintético variando por frame
-- **Propósito:** Validar GOP (keyframe interval), múltiplos frames, timestamps
-- **Critério:** Todos os 30 frames decodificam sem erro
+- **Content:** Synthetic NV12 pattern varying per frame
+- **Purpose:** Validate GOP (keyframe interval), multiple frames, timestamps
+- **Criteria:** All 30 frames decode without error
 
-### 2.5 TV-005: Static P-Frame (Futuro — Fase 5)
+### 2.5 TV-005: Static P-Frame (Future — Phase 5)
 
-- **Resolução:** 320×240
+- **Resolution:** 320×240
 - **Frames:** 30
 - **Profile:** Main
-- **Conteúdo:** Imagem estática repetida 30×
-- **Propósito:** P-frames com skip mode (sem movimento, sem residual)
+- **Content:** Static image repeated 30×
+- **Purpose:** P-frames with skip mode (no motion, no residual)
 
-### 2.6 TV-006: Motion P-Frame (Futuro — Fase 5)
+### 2.6 TV-006: Motion P-Frame (Future — Phase 5)
 
-- **Resolução:** 320×240
+- **Resolution:** 320×240
 - **Frames:** 60
 - **Profile:** Main
-- **Conteúdo:** Retângulo se movendo horizontalmente
+- **Content:** Rectangle moving horizontally
 
 ---
 
-## 3. Como Gerar
+## 3. How to Generate
+
 ```bash
-# Gerar flat gray NV12 (64x48, 1 frame)
-# Y plane: 64*48 = 3072 bytes de 0x80
-# UV plane: 64*24 = 1536 bytes de 0x80
+# Generate flat gray NV12 (64x48, 1 frame)
+# Y plane: 64*48 = 3072 bytes of 0x80
+# UV plane: 64*24 = 1536 bytes of 0x80
 python3 -c "
 import sys
 w, h = 64, 48
@@ -100,13 +100,13 @@ cmp tv001_flat_gray.nv12 tv001_flat_gray.decoded.nv12
 
 ---
 
-## 4. Hashes de Referência
+## 4. Reference Hashes
 
-Serão preenchidos quando o encoder e decoder estiverem funcionais.
+To be filled when encoder and decoder are fully functional.
 
 | Vector  | Input SHA256 | Bitstream SHA256 | Decoded SHA256 | Match? |
 |---------|--------------|------------------|----------------|--------|
-| TV-001  | (pendente)   | (pendente)       | (pendente)     | —      |
-| TV-002  | (pendente)   | (pendente)       | (pendente)     | —      |
-| TV-003  | (pendente)   | (pendente)       | (pendente)     | —      |
-| TV-004  | (pendente)   | (pendente)       | (pendente)     | —      |
+| TV-001  | (pending)    | (pending)        | (pending)      | —      |
+| TV-002  | (pending)    | (pending)        | (pending)      | —      |
+| TV-003  | (pending)    | (pending)        | (pending)      | —      |
+| TV-004  | (pending)    | (pending)        | (pending)      | —      |

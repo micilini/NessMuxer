@@ -6,15 +6,15 @@ chdir /d "%~dp0"
 :: NessMuxer - Build, Test & CLI Script (Windows 11)
 :: =========================================================================
 ::
-:: Uso:
-::   build_and_test.bat              (build default: Media Foundation only)
-::   build_and_test.bat x264         (build com x264)
-::   build_and_test.bat nvenc        (build com NVENC)
-::   build_and_test.bat all          (build com x264 + NVENC)
+:: Usage:
+::   build_and_test.bat              (default build: Media Foundation + N.148)
+::   build_and_test.bat x264         (build with x264)
+::   build_and_test.bat nvenc        (build with NVENC)
+::   build_and_test.bat all          (build with x264 + NVENC)
 ::
-:: Requisitos:
-::   - Visual Studio 2019/2022 com C/C++ desktop workload
-::   - CMake 3.15+ no PATH
+:: Requirements:
+::   - Visual Studio 2019/2022 with C/C++ desktop workload
+::   - CMake 3.15+ in PATH
 ::
 :: =========================================================================
 
@@ -22,18 +22,18 @@ set "PROJECT_DIR=%~dp0"
 set "BUILD_DIR=%PROJECT_DIR%build"
 set "RELEASE_DIR=%BUILD_DIR%\Release"
 
-:: Paths dos headers third-party (relativos ao projeto)
+:: Third-party header paths (relative to project)
 set "X264_HEADERS=%PROJECT_DIR%third_party\x264\include"
 set "NVENC_HEADERS=%PROJECT_DIR%third_party\nvenc\include"
 
-:: Arquivo raw para teste CLI
+:: Raw file for CLI tests (adjust to your environment)
 set "RAW_FILE=C:\Users\sdanz\Documents\NessStudio\Recordings\20260405_210620\screen.raw"
 
-:: Diretorio de saida dos testes
+:: Test output directory
 set "TEST_OUTPUT_DIR=%PROJECT_DIR%test_output"
 
 :: =========================================================================
-:: Parse argumento
+:: Parse argument
 :: =========================================================================
 set "BUILD_MODE=default"
 if /i "%~1"=="x264"  set "BUILD_MODE=x264"
@@ -61,12 +61,13 @@ echo ===================================================================
 echo  Mode:     %BUILD_MODE%
 echo  X264:     %USE_X264%
 echo  NVENC:    %USE_NVENC%
+echo  N.148:    ON
 echo  Raw file: %RAW_FILE%
 echo ===================================================================
 echo.
 
 :: =========================================================================
-:: STEP 1 — CMake Configure
+:: STEP 1 - CMake Configure
 :: =========================================================================
 echo [1/5] CMake Configure...
 echo.
@@ -94,7 +95,7 @@ echo [OK] CMake configure done.
 echo.
 
 :: =========================================================================
-:: STEP 2 — Build Release
+:: STEP 2 - Build Release
 :: =========================================================================
 echo [2/5] Building Release...
 echo.
@@ -109,7 +110,7 @@ echo.
 echo [OK] Build succeeded.
 echo.
 
-:: Verificar que os executaveis existem
+:: Check that executables exist
 echo Checking binaries:
 if exist "%RELEASE_DIR%\NessMuxer.dll"      (echo   [OK] NessMuxer.dll)      else (echo   [MISSING] NessMuxer.dll)
 if exist "%RELEASE_DIR%\test_ebml.exe"       (echo   [OK] test_ebml.exe)       else (echo   [MISSING] test_ebml.exe)
@@ -135,7 +136,7 @@ if exist "%RELEASE_DIR%\test_n148_cabac_conformance_small.exe"  (echo   [OK] tes
 echo.
 
 :: =========================================================================
-:: STEP 3 — Testes unitarios
+:: STEP 3 - Unit tests
 :: =========================================================================
 echo [3/5] Running unit tests...
 echo.
@@ -231,17 +232,6 @@ if %errorlevel% equ 0 (
 )
 echo.
 
-echo --- test_n148_phase7_epic ---
-"%RELEASE_DIR%\test_n148_phase7_epic.exe"
-if %errorlevel% equ 0 (
-    echo [PASS] test_n148_phase7_epic
-    set /a PASS_COUNT+=1
-) else (
-    echo [FAIL] test_n148_phase7_epic
-    set /a FAIL_COUNT+=1
-)
-echo.
-
 echo --- test_n148_roundtrip ---
 "%RELEASE_DIR%\test_n148_roundtrip.exe"
 if %errorlevel% equ 0 (
@@ -286,57 +276,24 @@ if %errorlevel% equ 0 (
 )
 echo.
 
-echo --- test_n148_cabac ---
- "%RELEASE_DIR%\test_n148_cabac.exe"
- if %errorlevel% equ 0 (
-     echo [PASS] test_n148_cabac
-     set /a PASS_COUNT+=1
- ) else (
-     echo [FAIL] test_n148_cabac
-     set /a FAIL_COUNT+=1
- )
- echo.
- 
- echo --- test_n148_cabac_engine ---
- "%RELEASE_DIR%\test_n148_cabac_engine.exe"
- if %errorlevel% equ 0 (
-     echo [PASS] test_n148_cabac_engine
-     set /a PASS_COUNT+=1
- ) else (
-     echo [FAIL] test_n148_cabac_engine
-     set /a FAIL_COUNT+=1
- )
- echo.
- 
- echo --- test_n148_cabac_slice_roundtrip ---
- "%RELEASE_DIR%\test_n148_cabac_slice_roundtrip.exe"
- if %errorlevel% equ 0 (
-     echo [PASS] test_n148_cabac_slice_roundtrip
-     set /a PASS_COUNT+=1
- ) else (
-     echo [FAIL] test_n148_cabac_slice_roundtrip
-     set /a FAIL_COUNT+=1
- )
- echo.
- 
- echo --- test_n148_cabac_conformance_small ---
- "%RELEASE_DIR%\test_n148_cabac_conformance_small.exe"
- if %errorlevel% equ 0 (
-     echo [PASS] test_n148_cabac_conformance_small
-     set /a PASS_COUNT+=1
- ) else (
-     echo [FAIL] test_n148_cabac_conformance_small
-     set /a FAIL_COUNT+=1
- )
- echo.
-
- echo --- test_n148_ratecontrol ---
+echo --- test_n148_ratecontrol ---
 "%RELEASE_DIR%\test_n148_ratecontrol.exe"
 if %errorlevel% equ 0 (
     echo [PASS] test_n148_ratecontrol
     set /a PASS_COUNT+=1
 ) else (
     echo [FAIL] test_n148_ratecontrol
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_profiles ---
+"%RELEASE_DIR%\test_n148_profiles.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_profiles
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_profiles
     set /a FAIL_COUNT+=1
 )
 echo.
@@ -352,13 +309,57 @@ if %errorlevel% equ 0 (
 )
 echo.
 
-echo --- test_n148_profiles ---
-"%RELEASE_DIR%\test_n148_profiles.exe"
+echo --- test_n148_cabac ---
+"%RELEASE_DIR%\test_n148_cabac.exe"
 if %errorlevel% equ 0 (
-    echo [PASS] test_n148_profiles
+    echo [PASS] test_n148_cabac
     set /a PASS_COUNT+=1
 ) else (
-    echo [FAIL] test_n148_profiles
+    echo [FAIL] test_n148_cabac
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_cabac_engine ---
+"%RELEASE_DIR%\test_n148_cabac_engine.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_cabac_engine
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_cabac_engine
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_cabac_slice_roundtrip ---
+"%RELEASE_DIR%\test_n148_cabac_slice_roundtrip.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_cabac_slice_roundtrip
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_cabac_slice_roundtrip
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_cabac_conformance_small ---
+"%RELEASE_DIR%\test_n148_cabac_conformance_small.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_cabac_conformance_small
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_cabac_conformance_small
+    set /a FAIL_COUNT+=1
+)
+echo.
+
+echo --- test_n148_phase7_epic ---
+"%RELEASE_DIR%\test_n148_phase7_epic.exe"
+if %errorlevel% equ 0 (
+    echo [PASS] test_n148_phase7_epic
+    set /a PASS_COUNT+=1
+) else (
+    echo [FAIL] test_n148_phase7_epic
     set /a FAIL_COUNT+=1
 )
 echo.
@@ -404,25 +405,24 @@ echo ===================================================================
 echo.
 
 :: =========================================================================
-:: STEP 4 — Testes CLI com screen.raw
+:: STEP 4 - CLI tests with screen.raw
 :: =========================================================================
 echo [4/5] CLI Tests with screen.raw...
 echo.
 
-:: Verificar se o arquivo raw existe
+:: Check if raw file exists
 if not exist "%RAW_FILE%" (
     echo [SKIP] Raw file not found: %RAW_FILE%
-    echo        Pulando testes CLI.
+    echo        Skipping CLI tests.
     goto :benchmark
 )
 
-:: Criar diretorio de saida
+:: Create output directory
 if not exist "%TEST_OUTPUT_DIR%" mkdir "%TEST_OUTPUT_DIR%"
 
-:: Descobrir o tamanho do arquivo raw para inferir quantos frames tem
-:: Vamos assumir que o NessStudio grava em 1920x1080 NV12 a 30fps
+:: Assume NessStudio records at 1920x1080 NV12 at 30fps
 :: frame_size = 1920 * 1080 * 3 / 2 = 3110400 bytes
-:: Se a resolucao for diferente, ajuste aqui:
+:: Adjust here if resolution differs:
 set "WIDTH=1920"
 set "HEIGHT=1080"
 set "FPS=30"
@@ -434,7 +434,7 @@ echo  Bitrate:    %BITRATE% kbps
 echo  Input:      %RAW_FILE%
 echo.
 
-:: --- CLI Test: nessmux com encoder AUTO ---
+:: --- CLI Test: nessmux with AUTO encoder ---
 echo --- nessmux (encoder: auto) ---
 set "OUT_AUTO=%TEST_OUTPUT_DIR%\screen_auto.mkv"
 "%RELEASE_DIR%\nessmux.exe" "%RAW_FILE%" "%OUT_AUTO%" --width %WIDTH% --height %HEIGHT% --fps %FPS% --bitrate %BITRATE% --encoder auto
@@ -445,7 +445,7 @@ if %errorlevel% equ 0 (
 )
 echo.
 
-:: --- CLI Test: nessmux com encoder MF ---
+:: --- CLI Test: nessmux with MF encoder ---
 echo --- nessmux (encoder: mf) ---
 set "OUT_MF=%TEST_OUTPUT_DIR%\screen_mf.mkv"
 "%RELEASE_DIR%\nessmux.exe" "%RAW_FILE%" "%OUT_MF%" --width %WIDTH% --height %HEIGHT% --fps %FPS% --bitrate %BITRATE% --encoder mf
@@ -456,50 +456,61 @@ if %errorlevel% equ 0 (
 )
 echo.
 
-:: --- CLI Test: nessmux com encoder N148 ---
-echo --- nessmux (encoder: n148 / codec: n148) ---
-set "OUT_N148=%TEST_OUTPUT_DIR%\screen_n148.mkv"
-"%RELEASE_DIR%\nessmux.exe" "%RAW_FILE%" "%OUT_N148%" --width %WIDTH% --height %HEIGHT% --fps %FPS% --bitrate %BITRATE% --encoder n148 --codec n148
+:: --- CLI Test: nessmux with N148 encoder (CAVLC) ---
+echo --- nessmux (encoder: n148, codec: n148, entropy: cavlc) ---
+set "OUT_N148_CAVLC=%TEST_OUTPUT_DIR%\screen_n148_cavlc.mkv"
+"%RELEASE_DIR%\nessmux.exe" "%RAW_FILE%" "%OUT_N148_CAVLC%" --width %WIDTH% --height %HEIGHT% --fps %FPS% --bitrate %BITRATE% --encoder n148 --codec n148 --entropy cavlc
 if %errorlevel% equ 0 (
-    echo [PASS] nessmux n148
+    echo [PASS] nessmux n148 cavlc
 ) else (
-    echo [FAIL] nessmux n148 (exit code: %errorlevel%)
+    echo [FAIL] nessmux n148 cavlc (exit code: %errorlevel%)
 )
 echo.
 
-:: --- CLI Test: nessmux com encoder x264 (se compilado) ---
+:: --- CLI Test: nessmux with N148 encoder (CABAC) ---
+echo --- nessmux (encoder: n148, codec: n148, entropy: cabac) ---
+set "OUT_N148_CABAC=%TEST_OUTPUT_DIR%\screen_n148_cabac.mkv"
+"%RELEASE_DIR%\nessmux.exe" "%RAW_FILE%" "%OUT_N148_CABAC%" --width %WIDTH% --height %HEIGHT% --fps %FPS% --bitrate %BITRATE% --encoder n148 --codec n148 --entropy cabac
+if %errorlevel% equ 0 (
+    echo [PASS] nessmux n148 cabac
+) else (
+    echo [FAIL] nessmux n148 cabac (exit code: %errorlevel%)
+)
+echo.
+
+:: --- CLI Test: nessmux with x264 encoder (if compiled) ---
 if "%USE_X264%"=="ON" (
-    echo --- nessmux [encoder=x264] ---
+    echo --- nessmux (encoder: x264) ---
     set "OUT_X264=%TEST_OUTPUT_DIR%\screen_x264.mkv"
     "%RELEASE_DIR%\nessmux.exe" "%RAW_FILE%" "!OUT_X264!" --width %WIDTH% --height %HEIGHT% --fps %FPS% --bitrate %BITRATE% --encoder x264
     if !errorlevel! equ 0 (
         echo [PASS] nessmux x264
     ) else (
-        echo [FAIL] nessmux x264 [exit code: !errorlevel!]
+        echo [FAIL] nessmux x264 (exit code: !errorlevel!)
     )
     echo.
 ) else (
-    echo [SKIP] nessmux x264 [not compiled with NESS_USE_X264]
+    echo [SKIP] nessmux x264 (not compiled with NESS_USE_X264)
     echo.
 )
 
-:: --- CLI Test: nessmux com encoder nvenc (se compilado) ---
+:: --- CLI Test: nessmux with nvenc encoder (if compiled) ---
 if "%USE_NVENC%"=="ON" (
-    echo --- nessmux [encoder=nvenc] ---
+    echo --- nessmux (encoder: nvenc) ---
     set "OUT_NVENC=%TEST_OUTPUT_DIR%\screen_nvenc.mkv"
     "%RELEASE_DIR%\nessmux.exe" "%RAW_FILE%" "!OUT_NVENC!" --width %WIDTH% --height %HEIGHT% --fps %FPS% --bitrate %BITRATE% --encoder nvenc
     if !errorlevel! equ 0 (
         echo [PASS] nessmux nvenc
     ) else (
-        echo [FAIL] nessmux nvenc [exit code: !errorlevel!]
+        echo [FAIL] nessmux nvenc (exit code: !errorlevel!)
     )
     echo.
 ) else (
-    echo [SKIP] nessmux nvenc [not compiled with NESS_USE_NVENC]
+    echo [SKIP] nessmux nvenc (not compiled with NESS_USE_NVENC)
     echo.
 )
 
-:: --- CLI Test: nessmux_validate nos MKVs gerados ---
+:: --- CLI Test: nessmux_validate on generated MKVs ---
 echo --- nessmux_validate ---
 echo.
 
@@ -517,10 +528,17 @@ if exist "%OUT_MF%" (
     echo.
 )
 
-if exist "%OUT_N148%" (
-    echo Validating: screen_n148.mkv
-    "%RELEASE_DIR%\nessmux_validate.exe" "%OUT_N148%"
-    if %errorlevel% equ 0 (echo [PASS] validate n148) else (echo [FAIL] validate n148)
+if exist "%OUT_N148_CAVLC%" (
+    echo Validating: screen_n148_cavlc.mkv
+    "%RELEASE_DIR%\nessmux_validate.exe" "%OUT_N148_CAVLC%"
+    if %errorlevel% equ 0 (echo [PASS] validate n148 cavlc) else (echo [FAIL] validate n148 cavlc)
+    echo.
+)
+
+if exist "%OUT_N148_CABAC%" (
+    echo Validating: screen_n148_cabac.mkv
+    "%RELEASE_DIR%\nessmux_validate.exe" "%OUT_N148_CABAC%"
+    if %errorlevel% equ 0 (echo [PASS] validate n148 cabac) else (echo [FAIL] validate n148 cabac)
     echo.
 )
 
@@ -539,7 +557,7 @@ if "%USE_NVENC%"=="ON" if exist "%TEST_OUTPUT_DIR%\screen_nvenc.mkv" (
 )
 
 :: =========================================================================
-:: STEP 5 — Benchmark
+:: STEP 5 - Benchmark
 :: =========================================================================
 :benchmark
 echo [5/5] Running benchmark...
@@ -549,20 +567,24 @@ echo --- Benchmark (encoder: auto) ---
 "%RELEASE_DIR%\nessmux_bench.exe" --encoder auto
 echo.
 
+echo --- Benchmark (encoder: n148) ---
+"%RELEASE_DIR%\nessmux_bench.exe" --encoder n148
+echo.
+
 if "%USE_X264%"=="ON" (
-    echo --- Benchmark [encoder=x264] ---
+    echo --- Benchmark (encoder: x264) ---
     "%RELEASE_DIR%\nessmux_bench.exe" --encoder x264
     echo.
 )
 
 if "%USE_NVENC%"=="ON" (
-    echo --- Benchmark [encoder=nvenc] ---
+    echo --- Benchmark (encoder: nvenc) ---
     "%RELEASE_DIR%\nessmux_bench.exe" --encoder nvenc
     echo.
 )
 
 :: =========================================================================
-:: Resumo final
+:: Final summary
 :: =========================================================================
 echo.
 echo ===================================================================
@@ -574,13 +596,14 @@ echo  Binaries:   %RELEASE_DIR%
 echo.
 if exist "%TEST_OUTPUT_DIR%\screen_auto.mkv" (
     echo  Output MKVs:
-    if exist "%TEST_OUTPUT_DIR%\screen_auto.mkv"   echo    - %TEST_OUTPUT_DIR%\screen_auto.mkv
-    if exist "%TEST_OUTPUT_DIR%\screen_mf.mkv"     echo    - %TEST_OUTPUT_DIR%\screen_mf.mkv
-    if exist "%TEST_OUTPUT_DIR%\screen_n148.mkv"   echo    - %TEST_OUTPUT_DIR%\screen_n148.mkv
-    if exist "%TEST_OUTPUT_DIR%\screen_x264.mkv"   echo    - %TEST_OUTPUT_DIR%\screen_x264.mkv
-    if exist "%TEST_OUTPUT_DIR%\screen_nvenc.mkv"  echo    - %TEST_OUTPUT_DIR%\screen_nvenc.mkv
+    if exist "%TEST_OUTPUT_DIR%\screen_auto.mkv"        echo    - %TEST_OUTPUT_DIR%\screen_auto.mkv
+    if exist "%TEST_OUTPUT_DIR%\screen_mf.mkv"          echo    - %TEST_OUTPUT_DIR%\screen_mf.mkv
+    if exist "%TEST_OUTPUT_DIR%\screen_n148_cavlc.mkv"  echo    - %TEST_OUTPUT_DIR%\screen_n148_cavlc.mkv
+    if exist "%TEST_OUTPUT_DIR%\screen_n148_cabac.mkv"  echo    - %TEST_OUTPUT_DIR%\screen_n148_cabac.mkv
+    if exist "%TEST_OUTPUT_DIR%\screen_x264.mkv"        echo    - %TEST_OUTPUT_DIR%\screen_x264.mkv
+    if exist "%TEST_OUTPUT_DIR%\screen_nvenc.mkv"       echo    - %TEST_OUTPUT_DIR%\screen_nvenc.mkv
     echo.
-    echo  Dica: abra os MKVs com ffplay ou VLC para verificar visualmente:
+    echo  Tip: open the MKVs with ffplay or VLC to verify visually:
     echo    ffplay "%TEST_OUTPUT_DIR%\screen_auto.mkv"
 )
 echo.

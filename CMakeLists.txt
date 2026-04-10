@@ -56,6 +56,9 @@ elseif(APPLE)
         "-framework CoreFoundation"
     )
     target_compile_definitions(NessMuxer PRIVATE NESS_HAVE_VIDEOTOOLBOX)
+else()
+    # Linux needs libm for math functions
+    target_link_libraries(NessMuxer PRIVATE m)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -145,6 +148,8 @@ if(NESS_USE_N148)
         src/encoder/n148/n148_profiles.c
         src/encoder/n148/n148_reorder.c
     )
+
+    add_subdirectory(lib/n148dec)
 endif()
 
 # ===========================================================================
@@ -202,6 +207,10 @@ add_executable(test_full_pipeline
 )
 target_include_directories(test_full_pipeline PRIVATE src include)
 target_compile_definitions(test_full_pipeline PRIVATE NESSMUXER_EXPORTS)
+
+if(UNIX AND NOT APPLE)
+    target_link_libraries(test_full_pipeline PRIVATE m)
+endif()
 
 if(WIN32)
     target_sources(test_full_pipeline PRIVATE

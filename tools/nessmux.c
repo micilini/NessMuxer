@@ -10,10 +10,10 @@ static void print_usage(void)
     printf("NessMuxer CLI - Raw NV12 to MKV converter\n");
     printf("\n");
     printf("Usage:\n");
-    printf("  nessmux <input.raw> <output.mkv> --width <w> --height <h> --fps <fps> --bitrate <kbps> [--encoder auto|mf|x264|nvenc|n148] [--codec avc|n148]\n");
+    printf("  nessmux <input.raw> <output.mkv> --width <w> --height <h> --fps <fps> --bitrate <kbps> [--encoder auto|mf|x264|nvenc|n148] [--codec avc|n148] [--entropy cavlc|cabac]\n");
     printf("\n");
     printf("Example:\n");
-    printf("  nessmux test_input.raw test_output.mkv --width 320 --height 240 --fps 30 --bitrate 1000 --encoder auto\n");
+    printf("  nessmux test_input.raw test_output.mkv --width 320 --height 240 --fps 30 --bitrate 1000 --encoder n148 --codec n148 --entropy cabac\n");
     printf("\n");
 }
 
@@ -100,6 +100,7 @@ int main(int argc, char** argv)
     int bitrate_kbps = 0;
     int encoder_type = NESS_ENCODER_AUTO;
     int codec_type = NESS_CODEC_AVC;
+    int entropy_mode = 0;
     int frame_size;
     uint8_t* frame_buf = NULL;
     FILE* input = NULL;
@@ -170,6 +171,20 @@ int main(int argc, char** argv)
                 printf("ERROR: invalid value for --codec: %s (use avc or n148)\n", argv[i]);
                 return 1;
             }
+        }else if (strcmp(argv[i], "--entropy") == 0) {
+            if (i + 1 >= argc) {
+                printf("ERROR: missing value for --entropy\n");
+                return 1;
+            }
+            i++;
+            if (strcmp(argv[i], "cavlc") == 0) {
+                entropy_mode = 0;
+            } else if (strcmp(argv[i], "cabac") == 0) {
+                entropy_mode = 1;
+            } else {
+                printf("ERROR: invalid value for --entropy: %s (use cavlc or cabac)\n", argv[i]);
+                return 1;
+            }
         }else {
             printf("ERROR: unknown argument: %s\n", argv[i]);
             print_usage();
@@ -230,6 +245,7 @@ int main(int argc, char** argv)
     config.bitrate_kbps = bitrate_kbps;
     config.encoder_type = encoder_type;
     config.codec_type = codec_type;
+    config.entropy_mode = entropy_mode;
 
     printf("NessMuxer CLI - starting conversion\n");
     printf("  Input:        %s\n", input_path);
@@ -244,6 +260,8 @@ int main(int argc, char** argv)
            (encoder_type == NESS_ENCODER_N148) ? "n148" : "auto");
     printf("  Codec:        %s\n",
            (codec_type == NESS_CODEC_N148) ? "N.148" : "AVC/H.264");
+    printf("  Entropy:      %s\n",
+           (entropy_mode == 1) ? "CABAC" : "CAVLC");
     printf("  Frame size:   %d bytes\n", frame_size);
     printf("  Total frames: %lld\n", total_frames_expected);
     printf("\n");
