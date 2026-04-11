@@ -37,26 +37,6 @@ static int decision_margin_inter_vs_intra(int lambda)
     return margin;
 }
 
-static int decision_skip_sad_threshold_4x4(int qp)
-{
-    int threshold = 4 + (qp >> 3);
-    if (threshold < 4)
-        threshold = 4;
-    if (threshold > 10)
-        threshold = 10;
-    return threshold;
-}
-
-static int decision_skip_sad_threshold_8x8(int qp)
-{
-    int threshold = 16 + (qp >> 2);
-    if (threshold < 16)
-        threshold = 16;
-    if (threshold > 28)
-        threshold = 28;
-    return threshold;
-}
-
 void n148_inter_ctx_init(N148InterContext* ctx)
 {
     if (!ctx) return;
@@ -120,15 +100,14 @@ int n148_inter_choose_4x4(const uint8_t* cur_plane,
     out->cost_intra = intra_sad_hint + lambda * 3;
 
     if (mr.ref_idx == 0 && mr.mvx_q4 == 0 && mr.mvy_q4 == 0)
-        out->cost_skip = mr.sad + lambda;
+        out->cost_skip = mr.sad;
     else
         out->cost_skip = out->cost_inter + 1000;
 
     if (mr.ref_idx == 0 &&
         mr.mvx_q4 == 0 &&
         mr.mvy_q4 == 0 &&
-        mr.sad <= decision_skip_sad_threshold_4x4(qp) &&
-        out->cost_skip <= out->cost_intra)
+        mr.sad <= 4)
         out->mode = 0;
     else if (out->cost_inter + decision_margin_inter_vs_intra(lambda) < out->cost_intra)
         out->mode = 1;
@@ -191,15 +170,14 @@ int n148_inter_choose_enhanced(const uint8_t* cur_plane,
     out->cost_intra = intra_sad_hint + lambda * 3;
 
     if (mr.ref_idx == 0 && mr.mvx_q4 == 0 && mr.mvy_q4 == 0)
-        out->cost_skip = mr.sad + lambda;
+        out->cost_skip = mr.sad;
     else
         out->cost_skip = out->cost_inter + 1000;
 
     if (mr.ref_idx == 0 &&
         mr.mvx_q4 == 0 &&
         mr.mvy_q4 == 0 &&
-        mr.sad <= decision_skip_sad_threshold_4x4(qp) &&
-        out->cost_skip <= out->cost_intra)
+        mr.sad <= 4)
         out->mode = 0;
     else if (out->cost_inter + decision_margin_inter_vs_intra(lambda) < out->cost_intra)
         out->mode = 1;
@@ -266,15 +244,14 @@ int n148_inter_choose_8x8(const uint8_t* cur_plane,
     out->cost_intra = intra_sad_hint + lambda * 6;
 
     if (mr.ref_idx == 0 && mr.mvx_q4 == 0 && mr.mvy_q4 == 0)
-        out->cost_skip = mr.sad + (lambda << 1);
+        out->cost_skip = mr.sad;
     else
         out->cost_skip = out->cost_inter + 1000;
 
     if (mr.ref_idx == 0 &&
         mr.mvx_q4 == 0 &&
         mr.mvy_q4 == 0 &&
-        mr.sad <= decision_skip_sad_threshold_8x8(qp) &&
-        out->cost_skip <= out->cost_intra)
+        mr.sad <= 16)
         out->mode = 0;
     else if (out->cost_inter + decision_margin_inter_vs_intra(lambda) + 2 < out->cost_intra)
         out->mode = 1;
