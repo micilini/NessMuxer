@@ -299,6 +299,7 @@ static int encode_one_block(N148EncoderCtx* ctx,
                                         width, height,
                                         bx, by,
                                         sample_stride, sample_offset,
+                                        qp,
                                         intra_pred);
 
     block_sad_from_buffers(src, intra_pred, &intra_sad);
