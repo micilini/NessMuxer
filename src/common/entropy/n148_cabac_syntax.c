@@ -513,6 +513,9 @@ int n148_cabac_write_block(N148CabacSession* s, N148BsWriter* bs, const int16_t*
     int nz_idx = 0;
     uint32_t mag;
     int num_gt1 = 0;
+    uint64_t coded_block_before_bits;
+    uint64_t sig_before_bits;
+    uint64_t last_before_bits;
     uint64_t siglast_before_bits;
     uint64_t level_before_bits;
     uint64_t sign_before_bits;
@@ -532,11 +535,13 @@ int n148_cabac_write_block(N148CabacSession* s, N148BsWriter* bs, const int16_t*
     BLK_LOG("ENC block coeff_count=%d last_nz=%d", coeff_count, last_nz);
 
     siglast_before_bits = n148_bs_writer_bits_written_exact(bs);
+    coded_block_before_bits = siglast_before_bits;
 
     if (last_nz < 0) {
         if (n148_cabac_encode_bin_ctx(&s->core, bs,
             n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_SIG), 0u) != 0)
             return -1;
+        n148_cabac_telemetry_add(&g_n148_cabac_telemetry.coeff_coded_block_bits, coded_block_before_bits, n148_bs_writer_bits_written_exact(bs));
         n148_cabac_telemetry_add(&g_n148_cabac_telemetry.coeff_siglast_bits, siglast_before_bits, n148_bs_writer_bits_written_exact(bs));
         return 0;
     }
@@ -545,17 +550,23 @@ int n148_cabac_write_block(N148CabacSession* s, N148BsWriter* bs, const int16_t*
         n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_SIG), 1u) != 0)
         return -1;
 
+    n148_cabac_telemetry_add(&g_n148_cabac_telemetry.coeff_coded_block_bits, coded_block_before_bits, n148_bs_writer_bits_written_exact(bs));
+
     for (i = 0; i <= last_nz; i++) {
         int sig = (qcoeff_zigzag[i] != 0) ? 1 : 0;
         int ctx_pos = (i < 15) ? i : 15;
 
+        sig_before_bits = n148_bs_writer_bits_written_exact(bs);
         if (n148_cabac_encode_bin_ctx(&s->core, bs,
             n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_SIG_BASE + ctx_pos)), (uint32_t)sig) != 0)
             return -1;
+        n148_cabac_telemetry_add(&g_n148_cabac_telemetry.coeff_sig_bits, sig_before_bits, n148_bs_writer_bits_written_exact(bs));
 
         if (sig) {
             positions[nz_count] = i;
             levels[nz_count++] = qcoeff_zigzag[i];
+
+            last_before_bits = n148_bs_writer_bits_written_exact(bs);
             if (i < last_nz) {
                 if (n148_cabac_encode_bin_ctx(&s->core, bs,
                     n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LAST_BASE + ctx_pos)), 0u) != 0)
@@ -565,6 +576,7 @@ int n148_cabac_write_block(N148CabacSession* s, N148BsWriter* bs, const int16_t*
                     n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LAST_BASE + ctx_pos)), 1u) != 0)
                     return -1;
             }
+            n148_cabac_telemetry_add(&g_n148_cabac_telemetry.coeff_last_bits, last_before_bits, n148_bs_writer_bits_written_exact(bs));
         }
     }
 

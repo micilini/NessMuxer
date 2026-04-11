@@ -296,8 +296,11 @@ static int run_case(const char* label,
     if (entropy_mode == N148_ENTROPY_CABAC) {
         N148CabacTelemetry telem;
         n148_cabac_telemetry_get(&telem);
-        printf("    [LOG] cabac telemetry: mv_bits=%llu coeff_siglast_bits=%llu coeff_level_bits=%llu coeff_sign_bits=%llu mvs=%llu blocks=%llu\n",
+        printf("    [LOG] cabac telemetry: mv_bits=%llu coeff_coded_block_bits=%llu coeff_sig_bits=%llu coeff_last_bits=%llu coeff_siglast_bits=%llu coeff_level_bits=%llu coeff_sign_bits=%llu mvs=%llu blocks=%llu\n",
                (unsigned long long)telem.mv_bits,
+               (unsigned long long)telem.coeff_coded_block_bits,
+               (unsigned long long)telem.coeff_sig_bits,
+               (unsigned long long)telem.coeff_last_bits,
                (unsigned long long)telem.coeff_siglast_bits,
                (unsigned long long)telem.coeff_level_bits,
                (unsigned long long)telem.coeff_sign_bits,

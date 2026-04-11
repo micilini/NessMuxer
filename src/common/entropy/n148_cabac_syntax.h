@@ -10,6 +10,9 @@ typedef struct {
     uint64_t has_residual_bits;
     uint64_t qp_delta_bits;
     uint64_t mv_bits;
+    uint64_t coeff_coded_block_bits;
+    uint64_t coeff_sig_bits;
+    uint64_t coeff_last_bits;
     uint64_t coeff_siglast_bits;
     uint64_t coeff_level_bits;
     uint64_t coeff_sign_bits;
