@@ -37,6 +37,39 @@ static int decision_margin_inter_vs_intra(int lambda)
     return margin;
 }
 
+static int refine_inter_cost_satd_4x4(const uint8_t* cur_plane,
+                                      const uint8_t* ref_plane,
+                                      int stride,
+                                      int width, int height,
+                                      int bx, int by,
+                                      int mvx_q4, int mvy_q4,
+                                      int sample_stride, int sample_offset,
+                                      int sad_fallback)
+{
+    uint8_t pred[16];
+    int satd;
+
+    if (!cur_plane || !ref_plane)
+        return sad_fallback;
+
+    if (sample_stride != 1 || sample_offset != 0)
+        return sad_fallback;
+
+    n148_interp_block_4x4_qpel(pred,
+                               ref_plane, stride,
+                               width, height,
+                               bx, by,
+                               mvx_q4, mvy_q4,
+                               sample_stride, sample_offset);
+
+    satd = n148_satd_4x4(cur_plane + by * stride + bx,
+                         stride,
+                         pred,
+                         4);
+
+    return ((sad_fallback * 3) + satd + 2) >> 2;
+}
+
 void n148_inter_ctx_init(N148InterContext* ctx)
 {
     if (!ctx) return;
@@ -77,6 +110,7 @@ int n148_inter_choose_4x4(const uint8_t* cur_plane,
 {
     N148QpelMotionResult mr;
     int lambda;
+    int dist_cost;
 
     if (!cur_plane || !ref_planes || ref_count <= 0 || !out)
         return -1;
@@ -92,11 +126,20 @@ int n148_inter_choose_4x4(const uint8_t* cur_plane,
 
     lambda = compute_lambda(qp);
 
+    dist_cost = refine_inter_cost_satd_4x4(cur_plane,
+                                           ref_planes[mr.ref_idx],
+                                           stride,
+                                           width, height,
+                                           bx, by,
+                                           mr.mvx_q4, mr.mvy_q4,
+                                           sample_stride, sample_offset,
+                                           mr.sad);
+
     out->ref_idx = mr.ref_idx;
     out->mvx_q4 = mr.mvx_q4;
     out->mvy_q4 = mr.mvy_q4;
     out->sad = mr.sad;
-    out->cost_inter = mr.sad + lambda * mv_bit_cost(mr.ref_idx, mr.mvx_q4, mr.mvy_q4);
+    out->cost_inter = dist_cost + lambda * mv_bit_cost(mr.ref_idx, mr.mvx_q4, mr.mvy_q4);
     out->cost_intra = intra_sad_hint + lambda * 3;
 
     if (mr.ref_idx == 0 && mr.mvx_q4 == 0 && mr.mvy_q4 == 0)
