@@ -70,6 +70,40 @@ static int refine_inter_cost_satd_4x4(const uint8_t* cur_plane,
     return ((sad_fallback * 3) + satd + 2) >> 2;
 }
 
+static int refine_inter_cost_satd_8x8(const uint8_t* cur_plane,
+                                      const uint8_t* ref_plane,
+                                      int stride,
+                                      int width, int height,
+                                      int bx, int by,
+                                      int mvx_q4, int mvy_q4,
+                                      int sad_fallback)
+{
+    uint8_t pred[64];
+    int satd_total = 0;
+    int sub_x, sub_y;
+
+    if (!cur_plane || !ref_plane)
+        return sad_fallback;
+
+    for (sub_y = 0; sub_y < 8; sub_y += 4) {
+        for (sub_x = 0; sub_x < 8; sub_x += 4) {
+            n148_interp_block_4x4_qpel(pred + sub_y * 8 + sub_x,
+                                       ref_plane, stride,
+                                       width, height,
+                                       bx + sub_x, by + sub_y,
+                                       mvx_q4, mvy_q4,
+                                       1, 0);
+
+            satd_total += n148_satd_4x4(cur_plane + (by + sub_y) * stride + (bx + sub_x),
+                                        stride,
+                                        pred + sub_y * 8 + sub_x,
+                                        8);
+        }
+    }
+
+    return ((sad_fallback * 3) + satd_total + 2) >> 2;
+}
+
 void n148_inter_ctx_init(N148InterContext* ctx)
 {
     if (!ctx) return;
@@ -174,6 +208,7 @@ int n148_inter_choose_enhanced(const uint8_t* cur_plane,
     N148QpelMotionResult mr;
     int lambda;
     int blk_x, blk_y;
+    int dist_cost;
 
     if (!cur_plane || !ref_planes || ref_count <= 0 || !out || !ctx)
         return -1;
@@ -205,11 +240,20 @@ int n148_inter_choose_enhanced(const uint8_t* cur_plane,
                                          &mr) != 0)
         return -1;
 
+    dist_cost = refine_inter_cost_satd_4x4(cur_plane,
+                                           ref_planes[mr.ref_idx],
+                                           stride,
+                                           width, height,
+                                           bx, by,
+                                           mr.mvx_q4, mr.mvy_q4,
+                                           1, 0,
+                                           mr.sad);
+
     out->ref_idx = mr.ref_idx;
     out->mvx_q4 = mr.mvx_q4;
     out->mvy_q4 = mr.mvy_q4;
     out->sad = mr.sad;
-    out->cost_inter = mr.cost;
+    out->cost_inter = dist_cost + lambda * mv_bit_cost(mr.ref_idx, mr.mvx_q4, mr.mvy_q4);
     out->cost_intra = intra_sad_hint + lambda * 3;
 
     if (mr.ref_idx == 0 && mr.mvx_q4 == 0 && mr.mvy_q4 == 0)
@@ -251,6 +295,7 @@ int n148_inter_choose_8x8(const uint8_t* cur_plane,
     N148MVPredictors preds;
     N148QpelMotionResult mr;
     int lambda;
+    int dist_cost;
 
     if (!cur_plane || !ref_planes || ref_count <= 0 || !out || !ctx)
         return -1;
@@ -279,11 +324,19 @@ int n148_inter_choose_8x8(const uint8_t* cur_plane,
                                          &mr) != 0)
         return -1;
 
+    dist_cost = refine_inter_cost_satd_8x8(cur_plane,
+                                           ref_planes[mr.ref_idx],
+                                           stride,
+                                           width, height,
+                                           bx, by,
+                                           mr.mvx_q4, mr.mvy_q4,
+                                           mr.sad);
+
     out->ref_idx = mr.ref_idx;
     out->mvx_q4 = mr.mvx_q4;
     out->mvy_q4 = mr.mvy_q4;
     out->sad = mr.sad;
-    out->cost_inter = mr.cost;
+    out->cost_inter = dist_cost + lambda * mv_bit_cost(mr.ref_idx, mr.mvx_q4, mr.mvy_q4);
     out->cost_intra = intra_sad_hint + lambda * 6;
 
     if (mr.ref_idx == 0 && mr.mvx_q4 == 0 && mr.mvy_q4 == 0)
