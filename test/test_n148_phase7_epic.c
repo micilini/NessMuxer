@@ -7,6 +7,7 @@
 #include "../src/decoder/n148/n148_decoder.h"
 #include "../src/codec/n148/n148_codec_private.h"
 #include "../src/codec/n148/n148_spec.h"
+#include "../src/common/entropy/n148_cabac_syntax.h"
 #include "../src/mkv_muxer.h"
 
 #define TEST_W 64
@@ -233,6 +234,8 @@ static int run_case(const char* label,
 
     printf("  [CASE] %s\n", label);
 
+    n148_cabac_telemetry_reset();
+
     if (g_n148_encoder_vtable.create(&enc, TEST_W, TEST_H, TEST_FPS, TEST_BR) != 0 || !enc)
         return 101;
 
@@ -289,6 +292,18 @@ static int run_case(const char* label,
     printf("    [LOG] total packets=%d total_bytes=%d\n",
            packets.count,
            packets.total_bytes);
+
+    if (entropy_mode == N148_ENTROPY_CABAC) {
+        N148CabacTelemetry telem;
+        n148_cabac_telemetry_get(&telem);
+        printf("    [LOG] cabac telemetry: mv_bits=%llu coeff_siglast_bits=%llu coeff_level_bits=%llu coeff_sign_bits=%llu mvs=%llu blocks=%llu\n",
+               (unsigned long long)telem.mv_bits,
+               (unsigned long long)telem.coeff_siglast_bits,
+               (unsigned long long)telem.coeff_level_bits,
+               (unsigned long long)telem.coeff_sign_bits,
+               (unsigned long long)telem.mvs_coded,
+               (unsigned long long)telem.blocks_coded);
+    }
 
     if (n148_decoder_create(&dec) != 0 || !dec)
         return 112;
