@@ -16,10 +16,23 @@ void n148_cabac_context_set_init_default(N148CabacContextSet* set)
         init_one(&set->ctx[i], N148_CABAC_STATE_NEUTRAL, N148_CABAC_MPS_ZERO);
 
     init_one(&set->ctx[N148_CTX_HAS_RESIDUAL],        22, 0);
-    init_one(&set->ctx[N148_CTX_COEFF_SIG],           20, 1); 
-    init_one(&set->ctx[N148_CTX_COEFF_LAST],          16, 0); 
-    init_one(&set->ctx[N148_CTX_COEFF_LEVEL_PREFIX],  28, 0); 
-    init_one(&set->ctx[N148_CTX_COEFF_LEVEL_SUFFIX],  28, 0); 
+    init_one(&set->ctx[N148_CTX_COEFF_SIG],           20, 1);
+    init_one(&set->ctx[N148_CTX_COEFF_LAST],          16, 0);
+    init_one(&set->ctx[N148_CTX_COEFF_LEVEL_PREFIX],  28, 0);
+    init_one(&set->ctx[N148_CTX_COEFF_LEVEL_SUFFIX],  28, 0);
+
+    for (i = 0; i < 16; i++) {
+        int st_sig = 30 - i;
+        int st_last = 35 - (i * 3 / 2);
+        if (st_sig < 12) st_sig = 12;
+        if (st_last < 10) st_last = 10;
+        init_one(&set->ctx[N148_CTX_SIG_BASE + i], (uint8_t)st_sig, 0);
+        init_one(&set->ctx[N148_CTX_LAST_BASE + i], (uint8_t)st_last, 0);
+    }
+
+    for (i = 0; i < 5; i++) {
+        init_one(&set->ctx[N148_CTX_LEVEL_GT1_BASE + i], (uint8_t)(24 + i * 2), 0);
+    }
 
     init_one(&set->ctx[N148_CTX_MVD_X_ZERO],  24, 0);
     init_one(&set->ctx[N148_CTX_MVD_X_GT1],   30, 0);

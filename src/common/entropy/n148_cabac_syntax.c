@@ -393,14 +393,14 @@ int n148_cabac_write_block(N148CabacSession* s, N148BsWriter* bs, const int16_t*
     int last_nz = -1;
     int nz_count = 0;
     int16_t levels[16];
+    int positions[16];
     int nz_idx = 0;
     uint32_t mag;
-    int prefix;
+    int num_gt1 = 0;
 
     if (!s || !bs || !qcoeff_zigzag || coeff_count < 0 || coeff_count > 16)
         return -1;
 
-   
     for (i = coeff_count - 1; i >= 0; i--) {
         if (qcoeff_zigzag[i] != 0) {
             last_nz = i;
@@ -410,7 +410,6 @@ int n148_cabac_write_block(N148CabacSession* s, N148BsWriter* bs, const int16_t*
 
     BLK_LOG("ENC block coeff_count=%d last_nz=%d", coeff_count, last_nz);
 
-   
     if (last_nz < 0) {
         return n148_cabac_encode_bin_ctx(&s->core, bs,
             n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_SIG), 0u);
@@ -420,25 +419,24 @@ int n148_cabac_write_block(N148CabacSession* s, N148BsWriter* bs, const int16_t*
         n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_SIG), 1u) != 0)
         return -1;
 
-   
     for (i = 0; i <= last_nz; i++) {
         int sig = (qcoeff_zigzag[i] != 0) ? 1 : 0;
+        int ctx_pos = (i < 15) ? i : 15;
 
         if (n148_cabac_encode_bin_ctx(&s->core, bs,
-            n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_LAST), (uint32_t)sig) != 0)
+            n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_SIG_BASE + ctx_pos)), (uint32_t)sig) != 0)
             return -1;
 
         if (sig) {
+            positions[nz_count] = i;
             levels[nz_count++] = qcoeff_zigzag[i];
             if (i < last_nz) {
-               
                 if (n148_cabac_encode_bin_ctx(&s->core, bs,
-                    n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_COUNT), 0u) != 0)
+                    n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LAST_BASE + ctx_pos)), 0u) != 0)
                     return -1;
             } else {
-               
                 if (n148_cabac_encode_bin_ctx(&s->core, bs,
-                    n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_COUNT), 1u) != 0)
+                    n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LAST_BASE + ctx_pos)), 1u) != 0)
                     return -1;
             }
         }
@@ -446,55 +444,47 @@ int n148_cabac_write_block(N148CabacSession* s, N148BsWriter* bs, const int16_t*
 
     BLK_LOG("ENC nz_count=%d", nz_count);
 
-   
     for (nz_idx = nz_count - 1; nz_idx >= 0; nz_idx--) {
         int16_t level = levels[nz_idx];
         uint32_t sign_bit = (level < 0) ? 1u : 0u;
+        int ctx_gt1 = (num_gt1 < 4) ? num_gt1 : 4;
         mag = (uint32_t)(level < 0 ? -level : level);
 
         BLK_LOG("ENC level[%d]=%d mag=%u", nz_idx, level, mag);
 
-       
-        prefix = (int)(mag - 1u);
-        if (prefix < 14) {
-            for (i = 0; i < prefix; i++) {
-                if (n148_cabac_encode_bin_ctx(&s->core, bs,
-                    n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_LEVEL_PREFIX), 1u) != 0)
-                    return -1;
-            }
-            if (n148_cabac_encode_bin_ctx(&s->core, bs,
-                n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_LEVEL_PREFIX), 0u) != 0)
+        if (n148_cabac_encode_bin_ctx(&s->core, bs,
+            n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LEVEL_GT1_BASE + ctx_gt1)),
+            (mag > 1u) ? 1u : 0u) != 0)
+            return -1;
+
+        if (mag == 1u) {
+            if (n148_cabac_encode_bin_bypass(&s->core, bs, sign_bit) != 0)
                 return -1;
-        } else {
-           
-            for (i = 0; i < 14; i++) {
-                if (n148_cabac_encode_bin_ctx(&s->core, bs,
-                    n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_LEVEL_PREFIX), 1u) != 0)
+            continue;
+        }
+
+        num_gt1++;
+
+        {
+            uint32_t rem = mag - 2u;
+            int k = 0;
+            while (rem >= (1u << k)) {
+                if (n148_cabac_encode_bin_bypass(&s->core, bs, 1u) != 0)
+                    return -1;
+                rem -= (1u << k);
+                k++;
+                if (k > 16)
                     return -1;
             }
-           
-            {
-                uint32_t suffix_val = mag - 15u;
-                uint32_t tmp = suffix_val + 1u;
-                int num_bits = 0;
-                uint32_t t2 = tmp;
-                while (t2 > 1u) { num_bits++; t2 >>= 1; }
-               
-                for (i = 0; i < num_bits; i++) {
-                    if (n148_cabac_encode_bin_bypass(&s->core, bs, 1u) != 0)
-                        return -1;
-                }
-                if (n148_cabac_encode_bin_bypass(&s->core, bs, 0u) != 0)
+            if (n148_cabac_encode_bin_bypass(&s->core, bs, 0u) != 0)
+                return -1;
+            while (k > 0) {
+                k--;
+                if (n148_cabac_encode_bin_bypass(&s->core, bs, (rem >> k) & 1u) != 0)
                     return -1;
-               
-                for (i = num_bits - 1; i >= 0; i--) {
-                    if (n148_cabac_encode_bin_bypass(&s->core, bs, (tmp >> i) & 1u) != 0)
-                        return -1;
-                }
             }
         }
 
-       
         if (n148_cabac_encode_bin_bypass(&s->core, bs, sign_bit) != 0)
             return -1;
     }
@@ -512,13 +502,13 @@ int n148_cabac_read_block(N148CabacSession* s, N148BsReader* bs, int16_t* qcoeff
     int nz_count = 0;
     int i;
     int nz_idx;
+    int num_gt1 = 0;
 
     if (!s || !bs || !qcoeff_zigzag || !coeff_count || max_coeffs <= 0)
         return -1;
 
     memset(qcoeff_zigzag, 0, (size_t)max_coeffs * sizeof(qcoeff_zigzag[0]));
 
-   
     if (n148_cabac_decode_bin_ctx(&s->core, bs,
         n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_SIG), &coded_block) != 0)
         return -1;
@@ -528,10 +518,11 @@ int n148_cabac_read_block(N148CabacSession* s, N148BsReader* bs, int16_t* qcoeff
         return 0;
     }
 
-   
     for (i = 0; i < max_coeffs; i++) {
+        int ctx_pos = (i < 15) ? i : 15;
+
         if (n148_cabac_decode_bin_ctx(&s->core, bs,
-            n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_LAST), &sig) != 0)
+            n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_SIG_BASE + ctx_pos)), &sig) != 0)
             return -1;
 
         if (sig) {
@@ -539,7 +530,7 @@ int n148_cabac_read_block(N148CabacSession* s, N148BsReader* bs, int16_t* qcoeff
             nz_count++;
 
             if (n148_cabac_decode_bin_ctx(&s->core, bs,
-                n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_COUNT), &last_flag) != 0)
+                n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LAST_BASE + ctx_pos)), &last_flag) != 0)
                 return -1;
 
             if (last_flag)
@@ -549,48 +540,52 @@ int n148_cabac_read_block(N148CabacSession* s, N148BsReader* bs, int16_t* qcoeff
 
     BLK_LOG("DEC nz_count=%d", nz_count);
 
-   
     for (nz_idx = nz_count - 1; nz_idx >= 0; nz_idx--) {
-        uint32_t bin = 0;
+        uint32_t gt1 = 0;
         uint32_t mag = 1;
         uint32_t sign_bit = 0;
-        int prefix_count = 0;
+        int ctx_gt1 = (num_gt1 < 4) ? num_gt1 : 4;
 
-       
-        for (prefix_count = 0; prefix_count < 14; prefix_count++) {
-            if (n148_cabac_decode_bin_ctx(&s->core, bs,
-                n148_cabac_context_get(&s->contexts, N148_CTX_COEFF_LEVEL_PREFIX), &bin) != 0)
+        if (n148_cabac_decode_bin_ctx(&s->core, bs,
+            n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LEVEL_GT1_BASE + ctx_gt1)), &gt1) != 0)
+            return -1;
+
+        if (!gt1) {
+            if (n148_cabac_decode_bin_bypass(&s->core, bs, &sign_bit) != 0)
                 return -1;
-            if (!bin)
-                break;
+            levels[nz_idx] = sign_bit ? -1 : 1;
+            BLK_LOG("DEC level[%d]=%d pos=%d", nz_idx, levels[nz_idx], positions[nz_idx]);
+            continue;
         }
 
-        mag = (uint32_t)prefix_count + 1u;
+        num_gt1++;
+        mag = 2;
 
-        if (prefix_count == 14) {
-           
-            uint32_t leading_ones = 0;
-            uint32_t suffix_val;
+        {
+            uint32_t bit = 0;
+            uint32_t rem = 0;
+            int k = 0;
+
             while (1) {
-                if (n148_cabac_decode_bin_bypass(&s->core, bs, &bin) != 0)
+                if (n148_cabac_decode_bin_bypass(&s->core, bs, &bit) != 0)
                     return -1;
-                if (!bin)
+                if (!bit)
                     break;
-                leading_ones++;
-                if (leading_ones > 24)
+                mag += (1u << k);
+                k++;
+                if (k > 16)
                     return -1;
             }
-            suffix_val = 1u;
-            for (i = 0; i < (int)leading_ones; i++) {
-                if (n148_cabac_decode_bin_bypass(&s->core, bs, &bin) != 0)
+
+            while (k > 0) {
+                k--;
+                if (n148_cabac_decode_bin_bypass(&s->core, bs, &bit) != 0)
                     return -1;
-                suffix_val = (suffix_val << 1) | (bin & 1u);
+                rem = (rem << 1) | (bit & 1u);
             }
-            suffix_val -= 1u;
-            mag = suffix_val + 15u;
+            mag += rem;
         }
 
-       
         if (n148_cabac_decode_bin_bypass(&s->core, bs, &sign_bit) != 0)
             return -1;
 
@@ -601,7 +596,6 @@ int n148_cabac_read_block(N148CabacSession* s, N148BsReader* bs, int16_t* qcoeff
         BLK_LOG("DEC level[%d]=%d pos=%d", nz_idx, levels[nz_idx], positions[nz_idx]);
     }
 
-   
     for (nz_idx = 0; nz_idx < nz_count; nz_idx++) {
         qcoeff_zigzag[positions[nz_idx]] = levels[nz_idx];
     }
