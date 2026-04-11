@@ -53,6 +53,11 @@ typedef struct {
     int max_refs;
     int enable_qpel;
 
+    N148MVField mv_field_cur;
+    N148MVField mv_field_prev;
+    N148InterContext inter_ctx;
+    int use_enhanced_me;
+
     struct {
         uint8_t* data;
         int      size;
@@ -252,7 +257,8 @@ static void push_reference_frame(N148EncoderCtx* ctx,
         ctx->ref_count++;
 }
 
-static int encode_one_block(N148BsWriter* bs,
+static int encode_one_block(N148EncoderCtx* ctx,
+                            N148BsWriter* bs,
                             N148CabacSession* cabac_session,
                             const uint8_t* src_plane,
                             uint8_t* recon_plane,
@@ -479,19 +485,20 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
                     if (bx >= ctx->width || by >= ctx->height)
                         continue;
 
-                        if (encode_one_block(&bs,
-                                         cabac_active ? &cabac_sess : NULL,
-                                         src_y,
-                                         recon_y,
-                                         ref_y,
-                                         ctx->ref_count,
-                                         ctx->width,
-                                         ctx->width, ctx->height,
-                                         bx, by, 1, 0,
-                                         ctx->qp,
-                                         ctx->search_range,
-                                         ((frame_type == N148_FRAME_P || frame_type == N148_FRAME_B) && ctx->ref_count > 0),
-                                         ctx->entropy_mode) != 0)
+                        if (encode_one_block(ctx,
+                                             &bs,
+                                             cabac_active ? &cabac_sess : NULL,
+                                             src_y,
+                                             recon_y,
+                                             ref_y,
+                                             ctx->ref_count,
+                                             ctx->width,
+                                             ctx->width, ctx->height,
+                                             bx, by, 1, 0,
+                                             ctx->qp,
+                                             ctx->search_range,
+                                             ((frame_type == N148_FRAME_P || frame_type == N148_FRAME_B) && ctx->ref_count > 0),
+                                             ctx->entropy_mode) != 0)
                         goto fail;
                 }
             }
@@ -507,19 +514,20 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
                         if (bx >= cw || by >= chh)
                             continue;
 
-                            if (encode_one_block(&bs,
-                                         cabac_active ? &cabac_sess : NULL,
-                                             src_uv,
-                                             recon_uv,
-                                             ref_uv,
-                                             ctx->ref_count,
-                                             ctx->width,
-                                             cw, chh,
-                                             bx, by, 2, ch,
-                                             ctx->qp,
-                                             ctx->search_range,
-                                             ((frame_type == N148_FRAME_P || frame_type == N148_FRAME_B) && ctx->ref_count > 0),
-                                             ctx->entropy_mode) != 0)
+                            if (encode_one_block(ctx,
+                                                 &bs,
+                                                 cabac_active ? &cabac_sess : NULL,
+                                                 src_uv,
+                                                 recon_uv,
+                                                 ref_uv,
+                                                 ctx->ref_count,
+                                                 ctx->width,
+                                                 cw, chh,
+                                                 bx, by, 2, ch,
+                                                 ctx->qp,
+                                                 ctx->search_range,
+                                                 ((frame_type == N148_FRAME_P || frame_type == N148_FRAME_B) && ctx->ref_count > 0),
+                                                 ctx->entropy_mode) != 0)
                             goto fail;
                     }
                 }
@@ -540,8 +548,17 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
     if (ensure_ref_buffers(ctx, y_size, uv_size) != 0)
         goto fail;
 
-     if (frame_type != N148_FRAME_B)
+    if (frame_type != N148_FRAME_B) {
         push_reference_frame(ctx, recon_y, recon_uv, y_size, uv_size);
+
+        /* Swap MV fields for temporal prediction */
+        {
+            N148MVField temp = ctx->mv_field_prev;
+            ctx->mv_field_prev = ctx->mv_field_cur;
+            ctx->mv_field_cur = temp;
+            n148_mv_field_clear(&ctx->mv_field_cur);
+        }
+    }
 
     free(recon_y);
     free(recon_uv);
@@ -908,6 +925,16 @@ static int n148_create_wrapper(void** out, int width, int height, int fps, int b
         }
     }
 
+    ctx->use_enhanced_me = 1;
+    {
+        int mb_w = (width + 15) / 16;
+        int mb_h = (height + 15) / 16;
+        n148_mv_field_alloc(&ctx->mv_field_cur, mb_w, mb_h);
+        n148_mv_field_alloc(&ctx->mv_field_prev, mb_w, mb_h);
+        n148_inter_ctx_init(&ctx->inter_ctx);
+        ctx->inter_ctx.me_config.search_range = ctx->search_range;
+    }
+
     *out = ctx;
     return 0;
 }
@@ -1040,6 +1067,9 @@ static void n148_destroy_wrapper(void* enc)
         free(ctx->ref_y[i]);
         free(ctx->ref_uv[i]);
     }
+
+    n148_mv_field_free(&ctx->mv_field_cur);
+    n148_mv_field_free(&ctx->mv_field_prev);
 
     free(ctx);
 }
