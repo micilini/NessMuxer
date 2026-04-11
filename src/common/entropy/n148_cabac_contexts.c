@@ -23,11 +23,29 @@ void n148_cabac_context_set_init_default(N148CabacContextSet* set)
 
     for (i = 0; i < 16; i++) {
         int st_sig = 30 - i;
-        int st_last = 35 - (i * 3 / 2);
+        int st_last;
+        uint8_t mps_last;
+
         if (st_sig < 12) st_sig = 12;
+
+        if (i < 4) {
+            st_last = 35 - i;
+            mps_last = 0;
+        } else if (i < 8) {
+            st_last = 29 - (i - 4);
+            mps_last = 0;
+        } else if (i < 12) {
+            st_last = 24 - (i - 8);
+            mps_last = 0;
+        } else {
+            st_last = 22 - (i - 12);
+            mps_last = 1;
+        }
+
         if (st_last < 10) st_last = 10;
+
         init_one(&set->ctx[N148_CTX_SIG_BASE + i], (uint8_t)st_sig, 0);
-        init_one(&set->ctx[N148_CTX_LAST_BASE + i], (uint8_t)st_last, 0);
+        init_one(&set->ctx[N148_CTX_LAST_BASE + i], (uint8_t)st_last, mps_last);
     }
 
     for (i = 0; i < 5; i++) {
