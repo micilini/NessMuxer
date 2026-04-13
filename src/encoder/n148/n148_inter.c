@@ -37,6 +37,31 @@ static int decision_margin_inter_vs_intra(int lambda)
     return margin;
 }
 
+static int adaptive_skip_threshold_4x4(int qp, int sample_stride, int sample_offset)
+{
+    int threshold = 4 + (qp >> 1);
+
+    if (sample_stride != 1 || sample_offset != 0)
+        threshold += 6;
+
+    if (threshold < 6)
+        threshold = 6;
+    if (threshold > 40)
+        threshold = 40;
+    return threshold;
+}
+
+static int adaptive_skip_threshold_8x8(int qp)
+{
+    int threshold = 16 + qp;
+
+    if (threshold < 20)
+        threshold = 20;
+    if (threshold > 96)
+        threshold = 96;
+    return threshold;
+}
+
 static int refine_inter_cost_satd_4x4(const uint8_t* cur_plane,
                                       const uint8_t* ref_plane,
                                       int stride,
@@ -184,7 +209,8 @@ int n148_inter_choose_4x4(const uint8_t* cur_plane,
     if (mr.ref_idx == 0 &&
         mr.mvx_q4 == 0 &&
         mr.mvy_q4 == 0 &&
-        mr.sad <= 4)
+        dist_cost <= adaptive_skip_threshold_4x4(qp, sample_stride, sample_offset) &&
+        dist_cost + lambda <= out->cost_intra)
         out->mode = 0;
     else if (out->cost_inter + decision_margin_inter_vs_intra(lambda) < out->cost_intra)
         out->mode = 1;
@@ -264,7 +290,8 @@ int n148_inter_choose_enhanced(const uint8_t* cur_plane,
     if (mr.ref_idx == 0 &&
         mr.mvx_q4 == 0 &&
         mr.mvy_q4 == 0 &&
-        mr.sad <= 4)
+        dist_cost <= adaptive_skip_threshold_4x4(qp, 1, 0) &&
+        dist_cost + lambda <= out->cost_intra)
         out->mode = 0;
     else if (out->cost_inter + decision_margin_inter_vs_intra(lambda) < out->cost_intra)
         out->mode = 1;
@@ -347,7 +374,8 @@ int n148_inter_choose_8x8(const uint8_t* cur_plane,
     if (mr.ref_idx == 0 &&
         mr.mvx_q4 == 0 &&
         mr.mvy_q4 == 0 &&
-        mr.sad <= 16)
+        dist_cost <= adaptive_skip_threshold_8x8(qp) &&
+        dist_cost + lambda <= out->cost_intra)
         out->mode = 0;
     else if (out->cost_inter + decision_margin_inter_vs_intra(lambda) + 2 < out->cost_intra)
         out->mode = 1;
