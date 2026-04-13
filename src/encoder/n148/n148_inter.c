@@ -31,34 +31,34 @@ static int compute_lambda(int qp)
 
 static int decision_margin_inter_vs_intra(int lambda)
 {
-    int margin = 1 + (lambda >> 4);
-    if (margin > 12)
-        margin = 12;
+    int margin = 1 + (lambda >> 5);
+    if (margin > 8)
+        margin = 8;
     return margin;
 }
 
 static int adaptive_skip_threshold_4x4(int qp, int sample_stride, int sample_offset)
 {
-    int threshold = 6 + ((qp * 3) >> 2);
+    int threshold = 8 + ((qp * 7) >> 3);
 
     if (sample_stride != 1 || sample_offset != 0)
         threshold += 6;
 
     if (threshold < 8)
         threshold = 8;
-    if (threshold > 48)
-        threshold = 48;
+    if (threshold > 56)
+        threshold = 56;
     return threshold;
 }
 
 static int adaptive_skip_threshold_8x8(int qp)
 {
-    int threshold = 16 + qp;
+    int threshold = 20 + qp;
 
     if (threshold < 20)
         threshold = 20;
-    if (threshold > 96)
-        threshold = 96;
+    if (threshold > 108)
+        threshold = 108;
     return threshold;
 }
 
