@@ -242,6 +242,36 @@ void n148_median_mv_predictor(const N148MVPredictors* preds, N148MV* out_mvp)
     }
 }
 
+static int get_block_satd(const uint8_t* cur, int cur_stride,
+                          const uint8_t* ref, int ref_stride,
+                          int width, int height,
+                          int bx, int by, int mvx, int mvy,
+                          int block_size)
+{
+    int rx = bx + mvx;
+    int ry = by + mvy;
+    int bs = (block_size == N148_ME_BLOCK_4x4) ? 4 :
+             (block_size == N148_ME_BLOCK_8x8) ? 8 : 16;
+
+    if (rx < 0 || ry < 0 || rx + bs > width || ry + bs > height)
+        return INT_MAX;
+
+    {
+        const uint8_t* cur_ptr = cur + by * cur_stride + bx;
+        const uint8_t* ref_ptr = ref + ry * ref_stride + rx;
+
+        if (block_size == N148_ME_BLOCK_4x4)
+            return n148_satd_4x4(cur_ptr, cur_stride, ref_ptr, ref_stride);
+        if (block_size == N148_ME_BLOCK_8x8)
+            return n148_satd_8x8(cur_ptr, cur_stride, ref_ptr, ref_stride);
+
+        return n148_satd_8x8(cur_ptr, cur_stride, ref_ptr, ref_stride) +
+               n148_satd_8x8(cur_ptr + 8, cur_stride, ref_ptr + 8, ref_stride) +
+               n148_satd_8x8(cur_ptr + 8 * cur_stride, cur_stride, ref_ptr + 8 * ref_stride, ref_stride) +
+               n148_satd_8x8(cur_ptr + 8 * cur_stride + 8, cur_stride, ref_ptr + 8 * ref_stride + 8, ref_stride);
+    }
+}
+
 static int get_block_sad(const uint8_t* cur, int cur_stride,
                          const uint8_t* ref, int ref_stride,
                          int width, int height,
@@ -583,8 +613,19 @@ int n148_motion_search_enhanced(const uint8_t* cur, int cur_stride,
         sad = get_block_sad(cur, cur_stride, ref, ref_stride,
                             width, height, bx, by, mvx, mvy, block_size);
         if (sad >= INT_MAX) continue;
-        
-        cost = sad + n148_mv_cost(mvx * 4, mvy * 4, pred_mvx, pred_mvy, config->lambda);
+
+        if (config->enable_satd) {
+            int satd = get_block_satd(cur, cur_stride, ref, ref_stride,
+                                      width, height, bx, by, mvx, mvy, block_size);
+            if (satd < INT_MAX)
+                cost = ((sad) + satd + 1) / 2;
+            else
+                cost = sad;
+        } else {
+            cost = sad;
+        }
+
+        cost += n148_mv_cost(mvx * 4, mvy * 4, pred_mvx, pred_mvy, config->lambda);
         
         if (cost < best_cost) {
             best_cost = cost;
@@ -682,7 +723,7 @@ void n148_me_config_defaults(N148MEConfig* config)
 {
     config->search_method = N148_ME_SEARCH_DIAMOND;
     config->search_range = 16;
-    config->enable_satd = 0;
+    config->enable_satd = 1;
     config->enable_early_term = 1;
     config->early_term_threshold = 256;
     config->subpel_refine = 2;
