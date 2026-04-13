@@ -309,15 +309,33 @@ static int encode_one_block(N148EncoderCtx* ctx,
         if (allow_inter && ref_planes && ref_count > 0) {
         N148InterDecision decision;
 
-        if (n148_inter_choose_4x4(src_plane, ref_planes, ref_count,
-                                  stride,
-                                  width, height,
-                                  bx, by,
-                                  sample_stride, sample_offset,
-                                  search_range,
-                                  qp,
-                                  intra_sad,
-                                  &decision) == 0) {
+        int inter_ret;
+
+        if (ctx &&
+            ctx->use_enhanced_me &&
+            sample_stride == 1 &&
+            sample_offset == 0) {
+            inter_ret = n148_inter_choose_enhanced(src_plane, ref_planes, ref_count,
+                                                   stride,
+                                                   width, height,
+                                                   bx, by,
+                                                   qp,
+                                                   intra_sad,
+                                                   &ctx->inter_ctx,
+                                                   &decision);
+        } else {
+            inter_ret = n148_inter_choose_4x4(src_plane, ref_planes, ref_count,
+                                              stride,
+                                              width, height,
+                                              bx, by,
+                                              sample_stride, sample_offset,
+                                              search_range,
+                                              qp,
+                                              intra_sad,
+                                              &decision);
+        }
+
+        if (inter_ret == 0) {
             if (decision.mode == 0 || decision.mode == 1) {
                 final_mode = decision.mode;
                 ref_idx = decision.ref_idx;
@@ -476,8 +494,13 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
             goto fail;
     }
 
+    n148_inter_ctx_set_mv_field(&ctx->inter_ctx, &ctx->mv_field_cur);
+    n148_inter_ctx_set_prev_mv_field(&ctx->inter_ctx, &ctx->mv_field_prev);
+
     for (mb_y = 0; mb_y < mb_rows; mb_y++) {
         for (mb_x = 0; mb_x < mb_cols; mb_x++) {
+            n148_inter_ctx_set_mb_pos(&ctx->inter_ctx, mb_x, mb_y);
+
             for (blk_y = 0; blk_y < 4; blk_y++) {
                 for (blk_x = 0; blk_x < 4; blk_x++) {
                     int bx = mb_x * 16 + blk_x * 4;
