@@ -374,7 +374,7 @@ static int encode_one_block(N148EncoderCtx* ctx,
         residual[i] = (int16_t)((int)src[i] - (int)pred[i]);
 
     n148_fdct_4x4(residual, coeff);
-    coeff_count = n148_quantize_4x4(coeff, qzigzag, qp);
+    coeff_count = n148_quantize_4x4_tuned(coeff, qzigzag, qp, final_mode == 2, sample_stride != 1 || sample_offset != 0);
 
     if (coeff_count <= 0) {
         if (entropy_mode == N148_ENTROPY_CABAC) {

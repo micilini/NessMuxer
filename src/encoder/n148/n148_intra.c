@@ -80,7 +80,7 @@ static int estimate_satd_4x4(const uint8_t src[16], const uint8_t pred[16])
     return satd >> 1;
 }
 
-static int estimate_coeff_count_4x4(const uint8_t src[16], const uint8_t pred[16], int qp)
+static int estimate_coeff_count_4x4(const uint8_t src[16], const uint8_t pred[16], int qp, int is_chroma)
 {
     int16_t residual[16];
     int16_t coeff[16];
@@ -91,7 +91,7 @@ static int estimate_coeff_count_4x4(const uint8_t src[16], const uint8_t pred[16
         residual[i] = (int16_t)((int)src[i] - (int)pred[i]);
 
     n148_fdct_4x4(residual, coeff);
-    return n148_quantize_4x4(coeff, qzigzag, qp);
+    return n148_quantize_4x4_tuned(coeff, qzigzag, qp, 1, is_chroma);
 }
 
 void n148_intra_build_prediction(const uint8_t* ref_plane, int stride,
@@ -204,7 +204,7 @@ int n148_intra_choose_mode(const uint8_t* src_plane,
 
         for (idx = 0; idx < candidate_count; idx++) {
             int satd = estimate_satd_4x4(src, candidate_preds[idx]);
-            int coeff_count = estimate_coeff_count_4x4(src, candidate_preds[idx], qp);
+            int coeff_count = estimate_coeff_count_4x4(src, candidate_preds[idx], qp, sample_stride != 1 || sample_offset != 0);
             int refine_cost = satd + coeff_count * 6;
 
             if (candidate_modes[idx] == N148_INTRA_PLANAR)
