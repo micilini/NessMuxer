@@ -31,23 +31,23 @@ static int compute_lambda(int qp)
 
 static int decision_margin_inter_vs_intra(int lambda)
 {
-    int margin = 2 + (lambda >> 3);
-    if (margin > 24)
-        margin = 24;
+    int margin = 1 + (lambda >> 4);
+    if (margin > 12)
+        margin = 12;
     return margin;
 }
 
 static int adaptive_skip_threshold_4x4(int qp, int sample_stride, int sample_offset)
 {
-    int threshold = 4 + (qp >> 1);
+    int threshold = 6 + ((qp * 3) >> 2);
 
     if (sample_stride != 1 || sample_offset != 0)
         threshold += 6;
 
-    if (threshold < 6)
-        threshold = 6;
-    if (threshold > 40)
-        threshold = 40;
+    if (threshold < 8)
+        threshold = 8;
+    if (threshold > 48)
+        threshold = 48;
     return threshold;
 }
 
@@ -199,7 +199,7 @@ int n148_inter_choose_4x4(const uint8_t* cur_plane,
     out->mvy_q4 = mr.mvy_q4;
     out->sad = mr.sad;
     out->cost_inter = dist_cost + lambda * mv_bit_cost(mr.ref_idx, mr.mvx_q4, mr.mvy_q4);
-    out->cost_intra = intra_sad_hint + lambda * 3;
+    out->cost_intra = intra_sad_hint + lambda * 4;
 
     if (mr.ref_idx == 0 && mr.mvx_q4 == 0 && mr.mvy_q4 == 0)
         out->cost_skip = mr.sad;
@@ -280,7 +280,7 @@ int n148_inter_choose_enhanced(const uint8_t* cur_plane,
     out->mvy_q4 = mr.mvy_q4;
     out->sad = mr.sad;
     out->cost_inter = dist_cost + lambda * mv_bit_cost(mr.ref_idx, mr.mvx_q4, mr.mvy_q4);
-    out->cost_intra = intra_sad_hint + lambda * 3;
+    out->cost_intra = intra_sad_hint + lambda * 4;
 
     if (mr.ref_idx == 0 && mr.mvx_q4 == 0 && mr.mvy_q4 == 0)
         out->cost_skip = mr.sad;
