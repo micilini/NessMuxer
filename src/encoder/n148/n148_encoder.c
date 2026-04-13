@@ -351,6 +351,22 @@ static int encode_one_block(N148EncoderCtx* ctx,
         }
     }
 
+    if (final_mode != 0) {
+        for (i = 0; i < 16; i++)
+            residual[i] = (int16_t)((int)src[i] - (int)pred[i]);
+
+        n148_fdct_4x4(residual, coeff);
+        coeff_count = n148_quantize_4x4_tuned(coeff, qzigzag, qp, final_mode == 2, sample_stride != 1 || sample_offset != 0);
+
+        if (final_mode != 2 &&
+            ref_idx == 0 &&
+            mvx_q4 == 0 &&
+            mvy_q4 == 0 &&
+            coeff_count <= 0) {
+            final_mode = 0;
+        }
+    }
+
     if (entropy_mode == N148_ENTROPY_CABAC) {
         if (n148_cabac_write_block_mode(cabac_session, bs, (uint32_t)final_mode) != 0)
             return -1;
@@ -387,12 +403,6 @@ static int encode_one_block(N148EncoderCtx* ctx,
                     bx, by, sample_stride, sample_offset, recon_u8);
         return 0;
     }
-
-    for (i = 0; i < 16; i++)
-        residual[i] = (int16_t)((int)src[i] - (int)pred[i]);
-
-    n148_fdct_4x4(residual, coeff);
-    coeff_count = n148_quantize_4x4_tuned(coeff, qzigzag, qp, final_mode == 2, sample_stride != 1 || sample_offset != 0);
 
     if (coeff_count <= 0) {
         if (entropy_mode == N148_ENTROPY_CABAC) {
