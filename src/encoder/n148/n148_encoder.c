@@ -80,6 +80,11 @@ typedef struct {
     int use_advanced_rc;
 } N148EncoderCtx;
 
+typedef struct {
+    int use_shared_inter;
+    N148InterDecision shared_decision;
+} N148PartitionPlan8x8;
+
 static uint8_t clip_u8(int v)
 {
     if (v < 0) return 0;
@@ -257,6 +262,246 @@ static void push_reference_frame(N148EncoderCtx* ctx,
         ctx->ref_count++;
 }
 
+static int inter_lambda_from_qp_local(int qp)
+{
+    static const int lambda_table[52] = {
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        2, 2, 2, 2, 3, 3, 3, 4, 4, 5,
+        6, 6, 7, 8, 9, 10, 11, 13, 14, 16,
+        18, 20, 23, 25, 29, 32, 36, 40, 45, 51,
+        57, 64, 72, 81, 91, 102, 114, 128, 144, 161,
+        181, 203
+    };
+
+    if (qp < 0) qp = 0;
+    if (qp > 51) qp = 51;
+    return lambda_table[qp];
+}
+
+static int mv_bit_cost_local(int ref_idx, int mvx_q4, int mvy_q4)
+{
+    int ax = (mvx_q4 < 0) ? -mvx_q4 : mvx_q4;
+    int ay = (mvy_q4 < 0) ? -mvy_q4 : mvy_q4;
+    return 4 + ref_idx * 2 + ax / 2 + ay / 2;
+}
+
+static int adaptive_skip_threshold_4x4_local(int qp)
+{
+    int threshold = 6 + ((qp * 3) >> 2);
+    if (threshold < 8)
+        threshold = 8;
+    if (threshold > 48)
+        threshold = 48;
+    return threshold;
+}
+
+static int estimate_coeff_count_from_pred_4x4(const uint8_t src[16],
+                                              const uint8_t pred[16],
+                                              int qp,
+                                              int is_intra,
+                                              int is_chroma)
+{
+    int16_t residual[16];
+    int16_t coeff[16];
+    int16_t qzigzag[16];
+    int i;
+
+    for (i = 0; i < 16; i++)
+        residual[i] = (int16_t)((int)src[i] - (int)pred[i]);
+
+    n148_fdct_4x4(residual, coeff);
+    return n148_quantize_4x4_tuned(coeff, qzigzag, qp, is_intra, is_chroma);
+}
+
+static int estimate_intra_partition_cost_4x4(const uint8_t src[16],
+                                             const uint8_t pred[16],
+                                             int qp,
+                                             int is_chroma)
+{
+    int lambda = inter_lambda_from_qp_local(qp);
+    int satd = n148_satd_4x4(src, 4, pred, 4);
+    int coeff_count = estimate_coeff_count_from_pred_4x4(src, pred, qp, 1, is_chroma);
+    return satd + coeff_count * (lambda + 6) + lambda * 4;
+}
+
+static int estimate_inter_partition_cost_4x4(const uint8_t src[16],
+                                             const uint8_t pred[16],
+                                             int qp,
+                                             int ref_idx,
+                                             int mvx_q4,
+                                             int mvy_q4)
+{
+    int lambda = inter_lambda_from_qp_local(qp);
+    int sad;
+    int satd;
+    int coeff_count;
+
+    if (block_sad_from_buffers(src, pred, &sad) != 0)
+        return 1 << 30;
+
+    satd = n148_satd_4x4(src, 4, pred, 4);
+    coeff_count = estimate_coeff_count_from_pred_4x4(src, pred, qp, 0, 0);
+
+    if (ref_idx == 0 && mvx_q4 == 0 && mvy_q4 == 0 && coeff_count <= 0 && sad <= adaptive_skip_threshold_4x4_local(qp))
+        return sad + lambda;
+
+    return satd + coeff_count * (lambda + 4) + lambda * mv_bit_cost_local(ref_idx, mvx_q4, mvy_q4);
+}
+
+static int choose_partition_plan_8x8(N148EncoderCtx* ctx,
+                                     const uint8_t* src_plane,
+                                     const uint8_t* recon_plane,
+                                     const uint8_t* const* ref_planes,
+                                     int ref_count,
+                                     int stride,
+                                     int width,
+                                     int height,
+                                     int bx,
+                                     int by,
+                                     int qp,
+                                     int search_range,
+                                     int allow_inter,
+                                     N148PartitionPlan8x8* out)
+{
+    int sub_y, sub_x;
+    int total_local_cost = 0;
+    int total_shared_cost = 0;
+    int intra_sad_sum = 0;
+    int non_intra_blocks = 0;
+    int strong_intra_blocks = 0;
+    int valid_blocks = 0;
+    N148InterDecision shared;
+
+    if (!out)
+        return -1;
+
+    memset(out, 0, sizeof(*out));
+
+    if (!ctx || !src_plane || !recon_plane || !ref_planes || ref_count <= 0 || !allow_inter)
+        return 0;
+
+    if (bx + 7 >= width || by + 7 >= height)
+        return 0;
+
+    for (sub_y = 0; sub_y < 8; sub_y += 4) {
+        for (sub_x = 0; sub_x < 8; sub_x += 4) {
+            uint8_t src_block[16];
+            uint8_t intra_pred[16];
+            uint8_t shared_pred[16];
+            N148InterDecision local;
+            int intra_sad = 0;
+            int intra_cost;
+            int local_cost;
+            int ret;
+
+            load_block(src_plane, stride, width, height,
+                       bx + sub_x, by + sub_y, 1, 0, src_block);
+
+            n148_intra_choose_mode(src_plane, recon_plane, stride,
+                                   width, height,
+                                   bx + sub_x, by + sub_y,
+                                   1, 0,
+                                   qp,
+                                   intra_pred);
+
+            block_sad_from_buffers(src_block, intra_pred, &intra_sad);
+            intra_cost = estimate_intra_partition_cost_4x4(src_block, intra_pred, qp, 0);
+            intra_sad_sum += intra_sad;
+
+            if (ctx->use_enhanced_me) {
+                ret = n148_inter_choose_enhanced(src_plane, ref_planes, ref_count,
+                                                 stride,
+                                                 width, height,
+                                                 bx + sub_x, by + sub_y,
+                                                 qp,
+                                                 intra_sad,
+                                                 &ctx->inter_ctx,
+                                                 &local);
+            } else {
+                ret = n148_inter_choose_4x4(src_plane, ref_planes, ref_count,
+                                            stride,
+                                            width, height,
+                                            bx + sub_x, by + sub_y,
+                                            1, 0,
+                                            search_range,
+                                            qp,
+                                            intra_sad,
+                                            &local);
+            }
+
+            if (ret != 0)
+                return -1;
+
+            if (local.mode == 2) {
+                local_cost = intra_cost;
+                strong_intra_blocks++;
+            } else {
+                build_inter_prediction_4x4(ref_planes[local.ref_idx], stride, width, height,
+                                           bx + sub_x, by + sub_y,
+                                           local.mvx_q4, local.mvy_q4,
+                                           1, 0,
+                                           shared_pred);
+                local_cost = estimate_inter_partition_cost_4x4(src_block, shared_pred, qp,
+                                                               local.ref_idx, local.mvx_q4, local.mvy_q4);
+                non_intra_blocks++;
+
+                if (local_cost + inter_lambda_from_qp_local(qp) * 2 >= intra_cost)
+                    strong_intra_blocks++;
+            }
+
+            total_local_cost += local_cost;
+            valid_blocks++;
+        }
+    }
+
+    if (valid_blocks != 4 || non_intra_blocks < 1)
+        return 0;
+
+    if (n148_inter_choose_8x8(src_plane, ref_planes, ref_count,
+                              stride,
+                              width, height,
+                              bx, by,
+                              qp,
+                              intra_sad_sum,
+                              &ctx->inter_ctx,
+                              &shared) != 0)
+        return 0;
+
+    if (shared.mode == 2)
+        return 0;
+
+    for (sub_y = 0; sub_y < 8; sub_y += 4) {
+        for (sub_x = 0; sub_x < 8; sub_x += 4) {
+            uint8_t src_block[16];
+            uint8_t pred_block[16];
+
+            load_block(src_plane, stride, width, height,
+                       bx + sub_x, by + sub_y, 1, 0, src_block);
+
+            build_inter_prediction_4x4(ref_planes[shared.ref_idx], stride, width, height,
+                                       bx + sub_x, by + sub_y,
+                                       shared.mvx_q4, shared.mvy_q4,
+                                       1, 0,
+                                       pred_block);
+
+            total_shared_cost += estimate_inter_partition_cost_4x4(src_block, pred_block, qp,
+                                                                    shared.ref_idx, shared.mvx_q4, shared.mvy_q4);
+        }
+    }
+
+    {
+        int lambda = inter_lambda_from_qp_local(qp);
+        int partition_bonus = lambda * 4 + 4;
+
+        if (strong_intra_blocks <= 2 && total_shared_cost + partition_bonus < total_local_cost) {
+            out->use_shared_inter = 1;
+            out->shared_decision = shared;
+        }
+    }
+
+    return 0;
+}
+
 static int encode_one_block(N148EncoderCtx* ctx,
                             N148BsWriter* bs,
                             N148CabacSession* cabac_session,
@@ -271,7 +516,8 @@ static int encode_one_block(N148EncoderCtx* ctx,
                             int qp,
                             int search_range,
                             int allow_inter,
-                            int entropy_mode)
+                            int entropy_mode,
+                            const N148InterDecision* preferred_inter)
 {
     uint8_t src[16];
     uint8_t pred[16];
@@ -308,13 +554,15 @@ static int encode_one_block(N148EncoderCtx* ctx,
 
         if (allow_inter && ref_planes && ref_count > 0) {
         N148InterDecision decision;
+        int inter_ret = -1;
 
-        int inter_ret;
-
-        if (ctx &&
-            ctx->use_enhanced_me &&
-            sample_stride == 1 &&
-            sample_offset == 0) {
+        if (preferred_inter && (preferred_inter->mode == 0 || preferred_inter->mode == 1)) {
+            decision = *preferred_inter;
+            inter_ret = 0;
+        } else if (ctx &&
+                   ctx->use_enhanced_me &&
+                   sample_stride == 1 &&
+                   sample_offset == 0) {
             inter_ret = n148_inter_choose_enhanced(src_plane, ref_planes, ref_count,
                                                    stride,
                                                    width, height,
@@ -511,29 +759,58 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
         for (mb_x = 0; mb_x < mb_cols; mb_x++) {
             n148_inter_ctx_set_mb_pos(&ctx->inter_ctx, mb_x, mb_y);
 
-            for (blk_y = 0; blk_y < 4; blk_y++) {
-                for (blk_x = 0; blk_x < 4; blk_x++) {
-                    int bx = mb_x * 16 + blk_x * 4;
-                    int by = mb_y * 16 + blk_y * 4;
+            for (blk_y = 0; blk_y < 4; blk_y += 2) {
+                for (blk_x = 0; blk_x < 4; blk_x += 2) {
+                    int part_bx = mb_x * 16 + blk_x * 4;
+                    int part_by = mb_y * 16 + blk_y * 4;
+                    N148PartitionPlan8x8 plan;
+                    int sub_y, sub_x;
 
-                    if (bx >= ctx->width || by >= ctx->height)
+                    if (part_bx >= ctx->width || part_by >= ctx->height)
                         continue;
 
-                        if (encode_one_block(ctx,
-                                             &bs,
-                                             cabac_active ? &cabac_sess : NULL,
-                                             src_y,
-                                             recon_y,
-                                             ref_y,
-                                             ctx->ref_count,
-                                             ctx->width,
-                                             ctx->width, ctx->height,
-                                             bx, by, 1, 0,
-                                             ctx->qp,
-                                             ctx->search_range,
-                                             ((frame_type == N148_FRAME_P || frame_type == N148_FRAME_B) && ctx->ref_count > 0),
-                                             ctx->entropy_mode) != 0)
+                    if (choose_partition_plan_8x8(ctx,
+                                                  src_y,
+                                                  recon_y,
+                                                  ref_y,
+                                                  ctx->ref_count,
+                                                  ctx->width,
+                                                  ctx->width,
+                                                  ctx->height,
+                                                  part_bx,
+                                                  part_by,
+                                                  ctx->qp,
+                                                  ctx->search_range,
+                                                  ((frame_type == N148_FRAME_P || frame_type == N148_FRAME_B) && ctx->ref_count > 0),
+                                                  &plan) != 0)
                         goto fail;
+
+                    for (sub_y = 0; sub_y < 2; sub_y++) {
+                        for (sub_x = 0; sub_x < 2; sub_x++) {
+                            int bx = part_bx + sub_x * 4;
+                            int by = part_by + sub_y * 4;
+
+                            if (bx >= ctx->width || by >= ctx->height)
+                                continue;
+
+                            if (encode_one_block(ctx,
+                                                 &bs,
+                                                 cabac_active ? &cabac_sess : NULL,
+                                                 src_y,
+                                                 recon_y,
+                                                 ref_y,
+                                                 ctx->ref_count,
+                                                 ctx->width,
+                                                 ctx->width, ctx->height,
+                                                 bx, by, 1, 0,
+                                                 ctx->qp,
+                                                 ctx->search_range,
+                                                 ((frame_type == N148_FRAME_P || frame_type == N148_FRAME_B) && ctx->ref_count > 0),
+                                                 ctx->entropy_mode,
+                                                 plan.use_shared_inter ? &plan.shared_decision : NULL) != 0)
+                                goto fail;
+                        }
+                    }
                 }
             }
 
@@ -561,7 +838,8 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
                                                  ctx->qp,
                                                  ctx->search_range,
                                                  ((frame_type == N148_FRAME_P || frame_type == N148_FRAME_B) && ctx->ref_count > 0),
-                                                 ctx->entropy_mode) != 0)
+                                                 ctx->entropy_mode,
+                                                 NULL) != 0)
                             goto fail;
                     }
                 }
