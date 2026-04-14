@@ -16,6 +16,152 @@ static inline int n148_sse2_hsum_sad(__m128i v)
     return (int)(sums[0] + sums[1]);
 }
 
+
+static inline __m128i n148_sse2_abs_epi16(__m128i v)
+{
+    __m128i mask = _mm_srai_epi16(v, 15);
+    return _mm_sub_epi16(_mm_xor_si128(v, mask), mask);
+}
+
+static inline void n148_sse2_hadamard4_epi16(__m128i r0, __m128i r1, __m128i r2, __m128i r3,
+                                              __m128i* o0, __m128i* o1, __m128i* o2, __m128i* o3)
+{
+    __m128i t0 = _mm_add_epi16(r0, r3);
+    __m128i t1 = _mm_add_epi16(r1, r2);
+    __m128i t2 = _mm_sub_epi16(r1, r2);
+    __m128i t3 = _mm_sub_epi16(r0, r3);
+    *o0 = _mm_add_epi16(t0, t1);
+    *o1 = _mm_add_epi16(t3, t2);
+    *o2 = _mm_sub_epi16(t0, t1);
+    *o3 = _mm_sub_epi16(t3, t2);
+}
+
+static inline int n148_sse2_hsum_epi32(__m128i v)
+{
+    uint32_t sums[4];
+    _mm_storeu_si128((__m128i*)sums, v);
+    return (int)(sums[0] + sums[1] + sums[2] + sums[3]);
+}
+
+static inline int n148_sse2_satd_4x4(const uint8_t* cur, int cur_stride,
+                                      const uint8_t* ref, int ref_stride)
+{
+    const __m128i zero = _mm_setzero_si128();
+    const __m128i ones = _mm_set1_epi16(1);
+    const __m128i low4_mask = _mm_set_epi16(0, 0, 0, 0, -1, -1, -1, -1);
+    __m128i r0, r1, r2, r3;
+    __m128i c0, c1, c2, c3;
+    __m128i t01, t23, u0, u1;
+    __m128i tr0, tr1, tr2, tr3;
+    __m128i h0, h1, h2, h3;
+    __m128i sum32;
+    uint32_t a = 0, b = 0;
+
+    memcpy(&a, cur + 0 * cur_stride, sizeof(uint32_t));
+    memcpy(&b, ref + 0 * ref_stride, sizeof(uint32_t));
+    r0 = _mm_sub_epi16(_mm_unpacklo_epi8(_mm_cvtsi32_si128((int)a), zero),
+                       _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)b), zero));
+
+    memcpy(&a, cur + 1 * cur_stride, sizeof(uint32_t));
+    memcpy(&b, ref + 1 * ref_stride, sizeof(uint32_t));
+    r1 = _mm_sub_epi16(_mm_unpacklo_epi8(_mm_cvtsi32_si128((int)a), zero),
+                       _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)b), zero));
+
+    memcpy(&a, cur + 2 * cur_stride, sizeof(uint32_t));
+    memcpy(&b, ref + 2 * ref_stride, sizeof(uint32_t));
+    r2 = _mm_sub_epi16(_mm_unpacklo_epi8(_mm_cvtsi32_si128((int)a), zero),
+                       _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)b), zero));
+
+    memcpy(&a, cur + 3 * cur_stride, sizeof(uint32_t));
+    memcpy(&b, ref + 3 * ref_stride, sizeof(uint32_t));
+    r3 = _mm_sub_epi16(_mm_unpacklo_epi8(_mm_cvtsi32_si128((int)a), zero),
+                       _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)b), zero));
+
+    n148_sse2_hadamard4_epi16(r0, r1, r2, r3, &c0, &c1, &c2, &c3);
+
+    t01 = _mm_unpacklo_epi16(c0, c1);
+    t23 = _mm_unpacklo_epi16(c2, c3);
+    u0 = _mm_unpacklo_epi32(t01, t23);
+    u1 = _mm_unpackhi_epi32(t01, t23);
+    tr0 = _mm_and_si128(u0, low4_mask);
+    tr1 = _mm_and_si128(_mm_srli_si128(u0, 8), low4_mask);
+    tr2 = _mm_and_si128(u1, low4_mask);
+    tr3 = _mm_and_si128(_mm_srli_si128(u1, 8), low4_mask);
+
+    n148_sse2_hadamard4_epi16(tr0, tr1, tr2, tr3, &h0, &h1, &h2, &h3);
+
+    sum32 = _mm_setzero_si128();
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(h0), ones));
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(h1), ones));
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(h2), ones));
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(h3), ones));
+
+    return (n148_sse2_hsum_epi32(sum32) + 1) >> 1;
+}
+
+static inline int n148_sse2_satd_flat16(const uint8_t a[16], const uint8_t b[16])
+{
+    return n148_sse2_satd_4x4(a, 4, b, 4);
+}
+
+
+static inline int n148_sse2_intra_estimate_satd_flat16(const uint8_t src[16], const uint8_t pred[16])
+{
+    const __m128i zero = _mm_setzero_si128();
+    const __m128i ones = _mm_set1_epi16(1);
+    const __m128i low4_mask = _mm_set_epi16(0, 0, 0, 0, -1, -1, -1, -1);
+    __m128i r0, r1, r2, r3;
+    __m128i v0, v1, v2, v3;
+    __m128i t01, t23, u0, u1;
+    __m128i tr0, tr1, tr2, tr3;
+    __m128i h0, h1, h2, h3;
+    __m128i sum32 = _mm_setzero_si128();
+    uint32_t a = 0, b = 0;
+
+    memcpy(&a, src + 0, sizeof(uint32_t));
+    memcpy(&b, pred + 0, sizeof(uint32_t));
+    r0 = _mm_sub_epi16(_mm_unpacklo_epi8(_mm_cvtsi32_si128((int)a), zero),
+                       _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)b), zero));
+
+    memcpy(&a, src + 4, sizeof(uint32_t));
+    memcpy(&b, pred + 4, sizeof(uint32_t));
+    r1 = _mm_sub_epi16(_mm_unpacklo_epi8(_mm_cvtsi32_si128((int)a), zero),
+                       _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)b), zero));
+
+    memcpy(&a, src + 8, sizeof(uint32_t));
+    memcpy(&b, pred + 8, sizeof(uint32_t));
+    r2 = _mm_sub_epi16(_mm_unpacklo_epi8(_mm_cvtsi32_si128((int)a), zero),
+                       _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)b), zero));
+
+    memcpy(&a, src + 12, sizeof(uint32_t));
+    memcpy(&b, pred + 12, sizeof(uint32_t));
+    r3 = _mm_sub_epi16(_mm_unpacklo_epi8(_mm_cvtsi32_si128((int)a), zero),
+                       _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)b), zero));
+
+    n148_sse2_hadamard4_epi16(r0, r1, r2, r3, &v0, &v1, &v2, &v3);
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(v0), ones));
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(v1), ones));
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(v2), ones));
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(v3), ones));
+
+    t01 = _mm_unpacklo_epi16(r0, r1);
+    t23 = _mm_unpacklo_epi16(r2, r3);
+    u0 = _mm_unpacklo_epi32(t01, t23);
+    u1 = _mm_unpackhi_epi32(t01, t23);
+    tr0 = _mm_and_si128(u0, low4_mask);
+    tr1 = _mm_and_si128(_mm_srli_si128(u0, 8), low4_mask);
+    tr2 = _mm_and_si128(u1, low4_mask);
+    tr3 = _mm_and_si128(_mm_srli_si128(u1, 8), low4_mask);
+
+    n148_sse2_hadamard4_epi16(tr0, tr1, tr2, tr3, &h0, &h1, &h2, &h3);
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(h0), ones));
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(h1), ones));
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(h2), ones));
+    sum32 = _mm_add_epi32(sum32, _mm_madd_epi16(n148_sse2_abs_epi16(h3), ones));
+
+    return n148_sse2_hsum_epi32(sum32) >> 1;
+}
+
 static inline int n148_sse2_sad_flat16(const uint8_t a[16], const uint8_t b[16])
 {
     __m128i va = _mm_loadu_si128((const __m128i*)a);
