@@ -1,6 +1,7 @@
 #include "n148_intra.h"
 #include "n148_transform.h"
 #include "n148_quant.h"
+#include "n148_profiles.h"
 #include "../../decoder/n148/n148_frame_recon.h"
 #include "../../codec/n148/n148_spec.h"
 
@@ -136,6 +137,7 @@ int n148_intra_choose_mode(const uint8_t* src_plane,
                            int width, int height,
                            int bx, int by,
                            int sample_stride, int sample_offset,
+                           int encode_mode,
                            int qp,
                            uint8_t best_pred[16])
 {
@@ -187,33 +189,59 @@ int n148_intra_choose_mode(const uint8_t* src_plane,
     }
 
     {
-        int candidate_modes[2];
-        const uint8_t* candidate_preds[2];
-        int candidate_count = 0;
         int idx;
 
-        candidate_modes[candidate_count] = best_mode;
-        candidate_preds[candidate_count] = pred_best;
-        candidate_count++;
+        if (encode_mode == N148_ENC_MODE_SLOW) {
+            for (idx = 0; idx < N148_INTRA_MODE_COUNT; idx++) {
+                int satd;
+                int coeff_count;
+                int refine_cost;
 
-        if (second_sad < INT_MAX && second_mode != best_mode && second_sad <= best_sad + 8) {
-            candidate_modes[candidate_count] = second_mode;
-            candidate_preds[candidate_count] = pred_second;
+                n148_intra_build_prediction(ref_plane, stride, width, height,
+                                            bx, by, sample_stride, sample_offset,
+                                            idx, pred);
+
+                satd = estimate_satd_4x4(src, pred);
+                coeff_count = estimate_coeff_count_4x4(src, pred, qp, sample_stride != 1 || sample_offset != 0);
+                refine_cost = satd + coeff_count * 6;
+
+                if (idx == N148_INTRA_PLANAR)
+                    refine_cost += 2;
+
+                if (refine_cost < best_refine_cost) {
+                    best_refine_cost = refine_cost;
+                    best_mode = idx;
+                    memcpy(best_pred, pred, 16);
+                }
+            }
+        } else {
+            int candidate_modes[2];
+            const uint8_t* candidate_preds[2];
+            int candidate_count = 0;
+
+            candidate_modes[candidate_count] = best_mode;
+            candidate_preds[candidate_count] = pred_best;
             candidate_count++;
-        }
 
-        for (idx = 0; idx < candidate_count; idx++) {
-            int satd = estimate_satd_4x4(src, candidate_preds[idx]);
-            int coeff_count = estimate_coeff_count_4x4(src, candidate_preds[idx], qp, sample_stride != 1 || sample_offset != 0);
-            int refine_cost = satd + coeff_count * 6;
+            if (second_sad < INT_MAX && second_mode != best_mode && second_sad <= best_sad + 8) {
+                candidate_modes[candidate_count] = second_mode;
+                candidate_preds[candidate_count] = pred_second;
+                candidate_count++;
+            }
 
-            if (candidate_modes[idx] == N148_INTRA_PLANAR)
-                refine_cost += 2;
+            for (idx = 0; idx < candidate_count; idx++) {
+                int satd = estimate_satd_4x4(src, candidate_preds[idx]);
+                int coeff_count = estimate_coeff_count_4x4(src, candidate_preds[idx], qp, sample_stride != 1 || sample_offset != 0);
+                int refine_cost = satd + coeff_count * 6;
 
-            if (refine_cost < best_refine_cost) {
-                best_refine_cost = refine_cost;
-                best_mode = candidate_modes[idx];
-                memcpy(best_pred, candidate_preds[idx], 16);
+                if (candidate_modes[idx] == N148_INTRA_PLANAR)
+                    refine_cost += 2;
+
+                if (refine_cost < best_refine_cost) {
+                    best_refine_cost = refine_cost;
+                    best_mode = candidate_modes[idx];
+                    memcpy(best_pred, candidate_preds[idx], 16);
+                }
             }
         }
     }

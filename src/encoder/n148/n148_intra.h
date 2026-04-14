@@ -16,6 +16,7 @@ int n148_intra_choose_mode(const uint8_t* src_plane,
                            int width, int height,
                            int bx, int by,
                            int sample_stride, int sample_offset,
+                           int encode_mode,
                            int qp,
                            uint8_t best_pred[16]);
 
