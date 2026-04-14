@@ -1,4 +1,5 @@
 #include "interpolation.h"
+#include "x86/n148_pixel_sse2.h"
 
 static int floor_div4(int v)
 {
@@ -54,7 +55,21 @@ void n148_interp_block_4x4_qpel(uint8_t out[16],
                                 int mvx_q4, int mvy_q4,
                                 int sample_stride, int sample_offset)
 {
+    int x_base = bx + floor_div4(mvx_q4);
+    int y_base = by + floor_div4(mvy_q4);
+    int fx = mod4_pos(mvx_q4);
+    int fy = mod4_pos(mvy_q4);
     int y, x;
+
+#if N148_HAVE_SSE2
+    if (sample_stride == 1 && sample_offset == 0 &&
+        x_base >= 0 && y_base >= 0 &&
+        x_base + 4 < width && y_base + 4 < height) {
+        n148_sse2_interp_block_4x4_qpel_luma_inbounds(out, plane, stride,
+                                                      x_base, y_base, fx, fy);
+        return;
+    }
+#endif
 
     for (y = 0; y < 4; y++) {
         for (x = 0; x < 4; x++) {
