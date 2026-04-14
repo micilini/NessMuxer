@@ -12,6 +12,7 @@ add_library(n148dec SHARED
     ../../src/decoder/n148/n148_dpb.c
 
     ../../src/common/interpolation.c
+    ../../src/common/n148_tables.c
 
     ../../src/common/entropy/n148_binarization.c
     ../../src/common/entropy/n148_cavlc.c

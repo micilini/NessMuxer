@@ -125,6 +125,7 @@ if(NESS_USE_N148)
         src/common/interpolation.c
         src/common/motion_search_qpel.c
         src/common/n148_metrics.c
+        src/common/n148_tables.c
 
         src/common/entropy/n148_binarization.c
         src/common/entropy/n148_cavlc.c
@@ -271,6 +272,7 @@ if(NESS_USE_N148)
         src/common/interpolation.c
         src/common/motion_search_qpel.c
         src/common/n148_metrics.c
+        src/common/n148_tables.c
 
         src/common/entropy/n148_binarization.c
         src/common/entropy/n148_cavlc.c
@@ -314,6 +316,7 @@ set(N148_FULL_SOURCES
     src/common/motion_search.c
     src/common/interpolation.c
     src/common/motion_search_qpel.c
+    src/common/n148_tables.c
     src/common/entropy/n148_binarization.c
     src/common/entropy/n148_cavlc.c
     src/common/entropy/n148_cabac.c
@@ -350,6 +353,7 @@ add_executable(test_n148_codec
     src/decoder/n148/n148_motion.c
     src/decoder/n148/n148_dpb.c
     src/common/interpolation.c
+    src/common/n148_tables.c
     src/common/entropy/n148_binarization.c
     src/common/entropy/n148_cavlc.c
     src/common/entropy/n148_cabac.c

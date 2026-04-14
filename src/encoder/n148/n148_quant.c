@@ -1,4 +1,5 @@
 #include "n148_quant.h"
+#include "../../common/n148_tables.h"
 
 static const int g_quant_scale[6] = { 10, 11, 13, 14, 16, 18 };
 
@@ -43,6 +44,7 @@ int n148_quantize_4x4_tuned(const int16_t* coeff, int16_t* out_zigzag, int qp, i
 {
     int16_t qcoeff_nat[16];
     int qstep = n148_quant_qstep_from_qp(qp);
+    int table_class = n148_table_block_class(is_intra, is_chroma);
     int i;
     int last_nonzero = -1;
 
@@ -50,22 +52,9 @@ int n148_quantize_4x4_tuned(const int16_t* coeff, int16_t* out_zigzag, int qp, i
         int c = coeff[i];
         int mag = (c < 0) ? -c : c;
         int scan_pos = g_inv_zigzag_4x4[i];
-        int deadzone;
+        int deadzone_q24 = n148_table_deadzone_q24(table_class, scan_pos);
+        int deadzone = (qstep * deadzone_q24 + 12) / 24;
         int q;
-
-        if (scan_pos == 0)
-            deadzone = qstep / (is_intra ? 2 : 3);
-        else if (scan_pos < 4)
-            deadzone = (qstep * (is_intra ? 5 : 6)) / 8;
-        else if (scan_pos < 8)
-            deadzone = (qstep * (is_intra ? 6 : 7)) / 8;
-        else
-            deadzone = (qstep * (is_intra ? 7 : 8)) / 8;
-
-        if (is_chroma && scan_pos > 0)
-            deadzone += qstep / 4;
-        else if (!is_intra && scan_pos >= 8)
-            deadzone += qstep / 8;
 
         if (mag <= deadzone) {
             q = 0;
@@ -87,20 +76,9 @@ int n148_quantize_4x4_tuned(const int16_t* coeff, int16_t* out_zigzag, int qp, i
     while (last_nonzero >= 0) {
         int v = out_zigzag[last_nonzero];
         int mag = (v < 0) ? -v : v;
-        int drop = 0;
+        int drop_mag = n148_table_tail_drop_mag(table_class, last_nonzero);
 
-        if (last_nonzero >= 9 && mag <= 1)
-            drop = 1;
-        else if (last_nonzero >= 5 && mag <= 1 && is_chroma)
-            drop = 1;
-        else if (last_nonzero >= 9 && mag <= 2 && is_chroma)
-            drop = 1;
-        else if (last_nonzero >= 8 && mag <= 1 && !is_intra)
-            drop = 1;
-        else if (last_nonzero >= 11 && mag <= 2 && !is_intra)
-            drop = 1;
-
-        if (!drop)
+        if (drop_mag <= 0 || mag > drop_mag)
             break;
 
         out_zigzag[last_nonzero] = 0;

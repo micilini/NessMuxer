@@ -1195,6 +1195,13 @@ static void n148_apply_runtime_profile_settings(N148EncoderCtx* ctx)
 
     ctx->inter_ctx.me_config.search_range = ctx->search_range;
     ctx->inter_ctx.me_config.max_refs = ctx->max_refs;
+
+    if (ctx->use_advanced_rc && ctx->fps > 0) {
+        double target = (double)ctx->bitrate_kbps * 1000.0 / (double)ctx->fps;
+        if (ctx->profile == N148_PROFILE_EPIC && ctx->entropy_mode == N148_ENTROPY_CABAC)
+            target *= 0.985;
+        ctx->rc_adv.bits_per_frame_target = target;
+    }
 }
 
 static void n148_log_profile_validation(N148EncoderCtx* ctx, const char* where)
