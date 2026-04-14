@@ -554,7 +554,7 @@ int n148_cabac_write_block(N148CabacSession* s, N148BsWriter* bs, const int16_t*
 
     for (i = 0; i <= last_nz; i++) {
         int sig = (qcoeff_zigzag[i] != 0) ? 1 : 0;
-        int ctx_pos = (i < 15) ? i : 15;
+        int ctx_pos = n148_sig_ctx_index_from_scan_pos(i);
 
         sig_before_bits = n148_bs_writer_bits_written_exact(bs);
         if (n148_cabac_encode_bin_ctx(&s->core, bs,
@@ -569,11 +569,11 @@ int n148_cabac_write_block(N148CabacSession* s, N148BsWriter* bs, const int16_t*
             last_before_bits = n148_bs_writer_bits_written_exact(bs);
             if (i < last_nz) {
                 if (n148_cabac_encode_bin_ctx(&s->core, bs,
-                    n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LAST_BASE + ctx_pos)), 0u) != 0)
+                    n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LAST_BASE + n148_last_ctx_index_from_scan_pos(i))), 0u) != 0)
                     return -1;
             } else {
                 if (n148_cabac_encode_bin_ctx(&s->core, bs,
-                    n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LAST_BASE + ctx_pos)), 1u) != 0)
+                    n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LAST_BASE + n148_last_ctx_index_from_scan_pos(i))), 1u) != 0)
                     return -1;
             }
             n148_cabac_telemetry_add(&g_n148_cabac_telemetry.coeff_last_bits, last_before_bits, n148_bs_writer_bits_written_exact(bs));
@@ -668,7 +668,7 @@ int n148_cabac_read_block(N148CabacSession* s, N148BsReader* bs, int16_t* qcoeff
     }
 
     for (i = 0; i < max_coeffs; i++) {
-        int ctx_pos = (i < 15) ? i : 15;
+        int ctx_pos = n148_sig_ctx_index_from_scan_pos(i);
 
         if (n148_cabac_decode_bin_ctx(&s->core, bs,
             n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_SIG_BASE + ctx_pos)), &sig) != 0)
@@ -679,7 +679,7 @@ int n148_cabac_read_block(N148CabacSession* s, N148BsReader* bs, int16_t* qcoeff
             nz_count++;
 
             if (n148_cabac_decode_bin_ctx(&s->core, bs,
-                n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LAST_BASE + ctx_pos)), &last_flag) != 0)
+                n148_cabac_context_get(&s->contexts, (N148CabacCtxId)(N148_CTX_LAST_BASE + n148_last_ctx_index_from_scan_pos(i))), &last_flag) != 0)
                 return -1;
 
             if (last_flag)
