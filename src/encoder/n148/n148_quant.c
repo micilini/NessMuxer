@@ -93,7 +93,9 @@ int n148_quantize_4x4_tuned(const int16_t* coeff, int16_t* out_zigzag, int qp, i
             drop = 1;
         else if (last_nonzero >= 6 && mag <= 1 && is_chroma)
             drop = 1;
-        else if (last_nonzero >= 12 && mag <= 2 && !is_intra)
+        else if (last_nonzero >= 8 && mag <= 1 && !is_intra)
+            drop = 1;
+        else if (last_nonzero >= 11 && mag <= 2 && !is_intra)
             drop = 1;
 
         if (!drop)
