@@ -142,82 +142,106 @@ int n148_intra_choose_mode(const uint8_t* src_plane,
                            uint8_t best_pred[16])
 {
     uint8_t src[16];
-    uint8_t pred[16];
-    uint8_t pred_best[16] = {0};
-    uint8_t pred_second[16] = {0};
     int best_mode = N148_INTRA_DC;
-    int second_mode = N148_INTRA_DC;
-    int best_sad = INT_MAX;
-    int second_sad = INT_MAX;
     int best_refine_cost = INT_MAX;
-    int mode, x, y;
 
     load_source_block(src_plane, stride, width, height,
                       bx, by, sample_stride, sample_offset, src);
 
-    for (mode = 0; mode < N148_INTRA_MODE_COUNT; mode++) {
-        int sad = 0;
+    if (encode_mode == N148_ENC_MODE_SLOW) {
+        uint8_t pred_modes[N148_INTRA_MODE_COUNT][16];
+        int satd_modes[N148_INTRA_MODE_COUNT];
+        int selected[N148_INTRA_MODE_COUNT] = {0};
+        int pick;
+        int mode;
+        int is_chroma = (sample_stride != 1 || sample_offset != 0);
 
-        n148_intra_build_prediction(ref_plane, stride, width, height,
-                                    bx, by, sample_stride, sample_offset,
-                                    mode, pred);
+        for (mode = 0; mode < N148_INTRA_MODE_COUNT; mode++) {
+            n148_intra_build_prediction(ref_plane, stride, width, height,
+                                        bx, by, sample_stride, sample_offset,
+                                        mode, pred_modes[mode]);
+            satd_modes[mode] = estimate_satd_4x4(src, pred_modes[mode]);
+        }
 
-        for (y = 0; y < 4; y++) {
-            for (x = 0; x < 4; x++) {
-                int px = bx + x;
-                int py = by + y;
-                if (px < width && py < height) {
-                    int d = (int)src[y * 4 + x] - (int)pred[y * 4 + x];
-                    sad += abs_val(d);
+        for (pick = 0; pick < 3 && pick < N148_INTRA_MODE_COUNT; pick++) {
+            int best_satd_mode = -1;
+            int best_satd_value = INT_MAX;
+
+            for (mode = 0; mode < N148_INTRA_MODE_COUNT; mode++) {
+                if (!selected[mode] && satd_modes[mode] < best_satd_value) {
+                    best_satd_value = satd_modes[mode];
+                    best_satd_mode = mode;
                 }
             }
-        }
 
-        if (sad < best_sad) {
-            second_sad = best_sad;
-            second_mode = best_mode;
-            memcpy(pred_second, pred_best, 16);
+            if (best_satd_mode < 0)
+                break;
 
-            best_sad = sad;
-            best_mode = mode;
-            memcpy(pred_best, pred, 16);
-        } else if (sad < second_sad) {
-            second_sad = sad;
-            second_mode = mode;
-            memcpy(pred_second, pred, 16);
-        }
-    }
+            selected[best_satd_mode] = 1;
 
-    {
-        int idx;
+            {
+                const uint8_t* pred = pred_modes[best_satd_mode];
+                int coeff_count = estimate_coeff_count_4x4(src, pred, qp, is_chroma);
+                int refine_cost = satd_modes[best_satd_mode] + coeff_count * 6;
 
-        if (encode_mode == N148_ENC_MODE_SLOW) {
-            for (idx = 0; idx < N148_INTRA_MODE_COUNT; idx++) {
-                int satd;
-                int coeff_count;
-                int refine_cost;
-
-                n148_intra_build_prediction(ref_plane, stride, width, height,
-                                            bx, by, sample_stride, sample_offset,
-                                            idx, pred);
-
-                satd = estimate_satd_4x4(src, pred);
-                coeff_count = estimate_coeff_count_4x4(src, pred, qp, sample_stride != 1 || sample_offset != 0);
-                refine_cost = satd + coeff_count * 6;
-
-                if (idx == N148_INTRA_PLANAR)
+                if (best_satd_mode == N148_INTRA_PLANAR)
                     refine_cost += 2;
 
                 if (refine_cost < best_refine_cost) {
                     best_refine_cost = refine_cost;
-                    best_mode = idx;
+                    best_mode = best_satd_mode;
                     memcpy(best_pred, pred, 16);
                 }
             }
-        } else {
+        }
+    } else {
+        uint8_t pred_modes[N148_INTRA_MODE_COUNT][16];
+        uint8_t pred_best[16] = {0};
+        uint8_t pred_second[16] = {0};
+        int second_mode = N148_INTRA_DC;
+        int best_sad = INT_MAX;
+        int second_sad = INT_MAX;
+        int mode, x, y;
+
+        for (mode = 0; mode < N148_INTRA_MODE_COUNT; mode++) {
+            int sad = 0;
+            uint8_t* pred = pred_modes[mode];
+
+            n148_intra_build_prediction(ref_plane, stride, width, height,
+                                        bx, by, sample_stride, sample_offset,
+                                        mode, pred);
+
+            for (y = 0; y < 4; y++) {
+                for (x = 0; x < 4; x++) {
+                    int px = bx + x;
+                    int py = by + y;
+                    if (px < width && py < height) {
+                        int d = (int)src[y * 4 + x] - (int)pred[y * 4 + x];
+                        sad += abs_val(d);
+                    }
+                }
+            }
+
+            if (sad < best_sad) {
+                second_sad = best_sad;
+                second_mode = best_mode;
+                memcpy(pred_second, pred_best, 16);
+
+                best_sad = sad;
+                best_mode = mode;
+                memcpy(pred_best, pred, 16);
+            } else if (sad < second_sad) {
+                second_sad = sad;
+                second_mode = mode;
+                memcpy(pred_second, pred, 16);
+            }
+        }
+
+        {
             int candidate_modes[2];
             const uint8_t* candidate_preds[2];
             int candidate_count = 0;
+            int idx;
 
             candidate_modes[candidate_count] = best_mode;
             candidate_preds[candidate_count] = pred_best;
