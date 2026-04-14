@@ -8,6 +8,10 @@ typedef int N148ProfileId;
 #define N148_PROF_HIGHMOTION  2
 #define N148_PROF_EPIC        3
 
+typedef int N148EncodeMode;
+#define N148_ENC_MODE_FAST    1
+#define N148_ENC_MODE_SLOW    2
+
 typedef struct {
     N148ProfileId id;
     const char*   name;

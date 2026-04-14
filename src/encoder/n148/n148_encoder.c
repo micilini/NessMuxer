@@ -38,6 +38,7 @@ typedef struct {
     int search_range;
     int profile;
     int entropy_mode;
+    int encode_mode;
 
     int64_t frame_duration_hns;
     int64_t next_pts_hns;
@@ -401,6 +402,7 @@ static int choose_partition_plan_8x8(N148EncoderCtx* ctx,
                                    width, height,
                                    bx + sub_x, by + sub_y,
                                    1, 0,
+                                   ctx ? ctx->encode_mode : N148_ENC_MODE_FAST,
                                    qp,
                                    intra_pred);
 
@@ -545,6 +547,7 @@ static int encode_one_block(N148EncoderCtx* ctx,
                                         width, height,
                                         bx, by,
                                         sample_stride, sample_offset,
+                                        ctx ? ctx->encode_mode : N148_ENC_MODE_FAST,
                                         qp,
                                         intra_pred);
 
@@ -1158,6 +1161,17 @@ static int n148_select_internal_profile(const N148EncoderCtx* ctx)
     return N148_PROF_MAIN;
 }
 
+static int n148_select_encode_mode(const N148EncoderCtx* ctx)
+{
+    if (!ctx)
+        return N148_ENC_MODE_FAST;
+
+    if (ctx->profile == N148_PROFILE_EPIC && ctx->entropy_mode == N148_ENTROPY_CABAC)
+        return N148_ENC_MODE_SLOW;
+
+    return N148_ENC_MODE_FAST;
+}
+
 static void n148_rebuild_codec_private(N148EncoderCtx* ctx)
 {
     N148SeqHeader hdr;
@@ -1178,6 +1192,8 @@ static void n148_apply_runtime_profile_settings(N148EncoderCtx* ctx)
 {
     if (!ctx)
         return;
+
+    ctx->encode_mode = n148_select_encode_mode(ctx);
 
     if (ctx->entropy_mode == N148_ENTROPY_CABAC) {
         ctx->enable_qpel = 1;
@@ -1257,6 +1273,7 @@ static int n148_create_wrapper(void** out, int width, int height, int fps, int b
 
     ctx->profile = N148_PROFILE_MAIN;
     ctx->entropy_mode = N148_ENTROPY_CAVLC;
+    ctx->encode_mode = N148_ENC_MODE_FAST;
 
     ctx->keyint = N148_GOP_KEYINT_DEFAULT;
     ctx->search_range = 8;
