@@ -63,7 +63,7 @@ int n148_quantize_4x4_tuned(const int16_t* coeff, int16_t* out_zigzag, int qp, i
             deadzone = (qstep * (is_intra ? 7 : 8)) / 8;
 
         if (is_chroma && scan_pos > 0)
-            deadzone += qstep / 8;
+            deadzone += qstep / 4;
         else if (!is_intra && scan_pos >= 8)
             deadzone += qstep / 8;
 
@@ -91,7 +91,9 @@ int n148_quantize_4x4_tuned(const int16_t* coeff, int16_t* out_zigzag, int qp, i
 
         if (last_nonzero >= 9 && mag <= 1)
             drop = 1;
-        else if (last_nonzero >= 6 && mag <= 1 && is_chroma)
+        else if (last_nonzero >= 5 && mag <= 1 && is_chroma)
+            drop = 1;
+        else if (last_nonzero >= 9 && mag <= 2 && is_chroma)
             drop = 1;
         else if (last_nonzero >= 8 && mag <= 1 && !is_intra)
             drop = 1;
