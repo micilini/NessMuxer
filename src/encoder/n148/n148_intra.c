@@ -182,7 +182,7 @@ int n148_intra_choose_mode(const uint8_t* src_plane,
             {
                 const uint8_t* pred = pred_modes[best_satd_mode];
                 int coeff_count = estimate_coeff_count_4x4(src, pred, qp, is_chroma);
-                int refine_cost = satd_modes[best_satd_mode] + coeff_count * 6;
+                int refine_cost = satd_modes[best_satd_mode] + coeff_count * 5;
 
                 if (best_satd_mode == N148_INTRA_PLANAR)
                     refine_cost += 2;
