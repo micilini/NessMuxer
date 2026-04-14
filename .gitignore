@@ -18,6 +18,11 @@ Release/
 *.sdf
 *.opensdf
 *.log
+*.mp4
+*.mkv
+*.zip
+*.raw
+*.txt
 
 # CMake
 CMakeCache.txt

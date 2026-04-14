@@ -389,6 +389,12 @@ int n148_motion_search_enhanced_qpel(const uint8_t* cur_plane, int cur_stride,
                                      pred_mvx_q4, pred_mvy_q4, config->lambda);
         refined_cost += r * 8;
 
+        if (r > 0 && best_cost < INT_MAX) {
+            int required_gain = 12 + (r * 4);
+            if (refined_cost + required_gain >= best_cost)
+                continue;
+        }
+
         if (refined_cost < best_cost) {
             best_cost = refined_cost;
             best_sad = refined_sad;

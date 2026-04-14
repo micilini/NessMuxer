@@ -1184,6 +1184,8 @@ static void n148_apply_runtime_profile_settings(N148EncoderCtx* ctx)
         ctx->enable_qpel = 1;
         if (ctx->search_range < 8)
             ctx->search_range = 8;
+        if (ctx->max_refs < 2)
+            ctx->max_refs = 2;
         ctx->inter_ctx.me_config.subpel_refine = 2;
     } else {
         /* Main/CAVLC fast path: obey profile limits and avoid expensive sub-pel work. */
