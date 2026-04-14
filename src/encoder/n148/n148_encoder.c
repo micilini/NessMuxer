@@ -1142,6 +1142,83 @@ static int n148_process_available(N148EncoderCtx* ctx,
     }
 }
 
+static int n148_select_internal_profile(const N148EncoderCtx* ctx)
+{
+    if (!ctx)
+        return N148_PROF_MAIN;
+
+    if (ctx->entropy_mode == N148_ENTROPY_CABAC)
+        return N148_PROF_EPIC;
+
+    if (ctx->max_bframes > 0 || ctx->reorder_delay > 0)
+        return N148_PROF_EPIC;
+
+    if (ctx->enable_qpel || ctx->max_refs > 1)
+        return N148_PROF_HIGHMOTION;
+
+    return N148_PROF_MAIN;
+}
+
+static void n148_rebuild_codec_private(N148EncoderCtx* ctx)
+{
+    N148SeqHeader hdr;
+
+    if (!ctx)
+        return;
+
+    n148_seq_header_defaults(&hdr, ctx->width, ctx->height, ctx->fps,
+                             ctx->profile, ctx->entropy_mode);
+    hdr.max_ref_frames = (uint8_t)ctx->max_refs;
+    hdr.max_reorder_depth = (uint8_t)ctx->reorder_delay;
+
+    if (n148_seq_header_serialize(&hdr, ctx->codec_private, sizeof(ctx->codec_private)) == N148_SEQ_HEADER_SIZE)
+        ctx->codec_private_size = N148_SEQ_HEADER_SIZE;
+}
+
+static void n148_apply_runtime_profile_settings(N148EncoderCtx* ctx)
+{
+    if (!ctx)
+        return;
+
+    if (ctx->entropy_mode == N148_ENTROPY_CABAC) {
+        ctx->enable_qpel = 1;
+        if (ctx->search_range < 8)
+            ctx->search_range = 8;
+        ctx->inter_ctx.me_config.subpel_refine = 2;
+    } else {
+        /* Main/CAVLC fast path: obey profile limits and avoid expensive sub-pel work. */
+        ctx->enable_qpel = 0;
+        if (ctx->search_range > 4)
+            ctx->search_range = 4;
+        ctx->inter_ctx.me_config.subpel_refine = 0;
+    }
+
+    ctx->inter_ctx.me_config.search_range = ctx->search_range;
+    ctx->inter_ctx.me_config.max_refs = ctx->max_refs;
+}
+
+static void n148_log_profile_validation(N148EncoderCtx* ctx, const char* where)
+{
+    char errbuf[256] = {0};
+    int prof_id;
+
+    if (!ctx)
+        return;
+
+    prof_id = n148_select_internal_profile(ctx);
+    if (n148_profile_validate(prof_id,
+                              ctx->max_bframes > 0,
+                              ctx->entropy_mode == N148_ENTROPY_CABAC,
+                              ctx->max_refs,
+                              16,
+                              ctx->enable_qpel,
+                              0,
+                              ctx->reorder_delay,
+                              errbuf, sizeof(errbuf)) != 0) {
+        N148_ENC_LOG("WARN: %s: %s", where, errbuf);
+    }
+}
+
 static int n148_create_wrapper(void** out, int width, int height, int fps, int bitrate_kbps)
 {
     N148EncoderCtx* ctx;
@@ -1219,23 +1296,6 @@ static int n148_create_wrapper(void** out, int width, int height, int fps, int b
                      bitrate_kbps, ctx->qp);
     }
 
-   
-    {
-        char errbuf[256] = {0};
-        int prof_id = (ctx->entropy_mode == N148_ENTROPY_CABAC)
-            ? N148_PROF_EPIC : N148_PROF_MAIN;
-        if (n148_profile_validate(prof_id,
-                ctx->max_bframes > 0,
-                ctx->entropy_mode == N148_ENTROPY_CABAC,
-                ctx->max_refs,
-                16,
-                ctx->enable_qpel,
-                0, 
-                ctx->reorder_delay,
-                errbuf, sizeof(errbuf)) != 0) {
-            N148_ENC_LOG("WARN: profile violation at create: %s", errbuf);
-        }
-    }
 
     ctx->use_enhanced_me = 1;
     {
@@ -1244,8 +1304,11 @@ static int n148_create_wrapper(void** out, int width, int height, int fps, int b
         n148_mv_field_alloc(&ctx->mv_field_cur, mb_w, mb_h);
         n148_mv_field_alloc(&ctx->mv_field_prev, mb_w, mb_h);
         n148_inter_ctx_init(&ctx->inter_ctx);
-        ctx->inter_ctx.me_config.search_range = ctx->search_range;
+        n148_apply_runtime_profile_settings(ctx);
     }
+
+    n148_rebuild_codec_private(ctx);
+    n148_log_profile_validation(ctx, "profile validation at create");
 
     *out = ctx;
     return 0;
@@ -1321,43 +1384,40 @@ int n148_encoder_set_profile_entropy_for_tests(void* enc, int profile, int entro
     N148_ENC_LOG("set_profile_entropy_for_tests: profile=%d entropy=%d",
                  ctx->profile, ctx->entropy_mode);
 
-    n148_seq_header_defaults(&hdr, ctx->width, ctx->height, ctx->fps,
-                             ctx->profile, ctx->entropy_mode);
-    hdr.max_ref_frames = (uint8_t)ctx->max_refs;
-    hdr.max_reorder_depth = (uint8_t)ctx->reorder_delay;
+    n148_apply_runtime_profile_settings(ctx);
+    n148_reorder_set_max_bframes(&ctx->reorder_queue, ctx->max_bframes);
+    n148_rebuild_codec_private(ctx);
 
-    if (n148_seq_header_serialize(&hdr,
-                                  ctx->codec_private,
-                                  sizeof(ctx->codec_private)) != N148_SEQ_HEADER_SIZE)
-        return -1;
-
-    ctx->codec_private_size = N148_SEQ_HEADER_SIZE;
-
-    N148_ENC_LOG("codec_private rebuilt: size=%d profile=%d entropy=%d refs=%d reorder=%d",
+    N148_ENC_LOG("codec_private rebuilt: size=%d profile=%d entropy=%d refs=%d reorder=%d qpel=%d range=%d",
                  ctx->codec_private_size,
                  ctx->profile,
                  ctx->entropy_mode,
                  ctx->max_refs,
-                 ctx->reorder_delay);
+                 ctx->reorder_delay,
+                 ctx->enable_qpel,
+                 ctx->search_range);
 
-   
-    {
-        char errbuf[256] = {0};
-        int prof_id = (ctx->entropy_mode == N148_ENTROPY_CABAC)
-            ? N148_PROF_EPIC : N148_PROF_MAIN;
-        if (n148_profile_validate(prof_id,
-                ctx->max_bframes > 0,
-                ctx->entropy_mode == N148_ENTROPY_CABAC,
-                ctx->max_refs,
-                16,
-                ctx->enable_qpel,
-                0,
-                ctx->reorder_delay,
-                errbuf, sizeof(errbuf)) != 0) {
-            N148_ENC_LOG("WARN: profile violation after set_profile: %s", errbuf);
-        }
-    }
+    n148_log_profile_validation(ctx, "profile validation after set_profile");
+    return 0;
+}
 
+int n148_encoder_set_bframes_for_tests(void* enc, int max_bframes)
+{
+    N148EncoderCtx* ctx = (N148EncoderCtx*)enc;
+
+    if (!ctx)
+        return -1;
+
+    if (max_bframes < 0)
+        max_bframes = 0;
+    if (max_bframes > 2)
+        max_bframes = 2;
+
+    ctx->max_bframes = max_bframes;
+    ctx->reorder_delay = max_bframes;
+    n148_reorder_set_max_bframes(&ctx->reorder_queue, ctx->max_bframes);
+    n148_rebuild_codec_private(ctx);
+    n148_log_profile_validation(ctx, "profile validation after set_bframes");
     return 0;
 }
 
