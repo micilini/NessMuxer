@@ -2,6 +2,16 @@ cmake_minimum_required(VERSION 3.15)
 project(NessMuxer C)
 set(CMAKE_C_STANDARD 11)
 
+# No gerador Visual Studio, a auto-regeneracao do CMake pode disputar o
+# arquivo generate.stamp durante builds paralelos (MSBuild /m), causando
+# "Cannot restore timestamp ... generate.stamp: Access denied".
+# Este projeto ja executa "cmake -S ... -B ..." antes do build no
+# build_and_test.bat, entao podemos desabilitar a regeneracao automatica
+# com seguranca no Windows/MSVC.
+if(MSVC)
+    set(CMAKE_SUPPRESS_REGENERATION ON)
+endif()
+
 # ===========================================================================
 # Options — o usuario escolhe quais backends extras quer compilar.
 # O backend nativo da plataforma (MF no Windows, VT no macOS) e automatico.
@@ -148,6 +158,7 @@ if(NESS_USE_N148)
         src/encoder/n148/n148_ratecontrol.c
         src/encoder/n148/n148_profiles.c
         src/encoder/n148/n148_reorder.c
+        src/encoder/n148/n148_slice_plan.c
     )
 
     add_subdirectory(lib/n148dec)
@@ -295,6 +306,7 @@ if(NESS_USE_N148)
         src/encoder/n148/n148_ratecontrol.c
         src/encoder/n148/n148_profiles.c
         src/encoder/n148/n148_reorder.c
+        src/encoder/n148/n148_slice_plan.c
     )
 endif()
 
@@ -335,6 +347,7 @@ set(N148_FULL_SOURCES
     src/encoder/n148/n148_ratecontrol.c
     src/encoder/n148/n148_profiles.c
     src/encoder/n148/n148_reorder.c
+    src/encoder/n148/n148_slice_plan.c
 )
 
 add_library(n148_full_obj OBJECT
@@ -479,6 +492,12 @@ add_executable(test_n148_profiles
 )
 target_include_directories(test_n148_profiles PRIVATE src)
 
+add_executable(test_n148_slice_plan
+    test/test_n148_slice_plan.c
+    src/encoder/n148/n148_slice_plan.c
+)
+target_include_directories(test_n148_slice_plan PRIVATE src)
+
 # --- FASE 9 tools test ---
 add_executable(test_n148_tools
     test/test_n148_tools.c
@@ -513,7 +532,19 @@ add_executable(nessmux_bench
 target_include_directories(nessmux_bench PRIVATE include)
 target_link_libraries(nessmux_bench PRIVATE NessMuxer)
 
+add_executable(n148_regression_bench
+    tools/n148_regression_bench.c
+)
+target_include_directories(n148_regression_bench PRIVATE include)
+target_link_libraries(n148_regression_bench PRIVATE NessMuxer)
+
 # --- FASE 9: N.148 toolchain ---
+add_executable(n148_framegrab
+    tools/n148_framegrab.c
+)
+target_include_directories(n148_framegrab PRIVATE src lib/n148dec)
+target_link_libraries(n148_framegrab PRIVATE n148dec)
+
 add_executable(n148dump
     tools/n148dump.c
     src/codec/n148/n148_bitstream.c

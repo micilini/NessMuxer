@@ -6,6 +6,7 @@
 #include "n148_entropy_enc_cavlc.h"
 #include "n148_ratecontrol_basic.h"
 #include "n148_reorder.h"
+#include "n148_slice_plan.h"
 #include "../../common/entropy/n148_cavlc.h"
 #include "../../common/entropy/n148_cabac.h"
 #include "../../common/interpolation.h"
@@ -80,6 +81,9 @@ typedef struct {
 
     N148RateControl rc_adv;
     int use_advanced_rc;
+
+    N148SlicePlan slice_plan;
+    int requested_slice_count;
 } N148EncoderCtx;
 
 typedef struct {
@@ -294,7 +298,7 @@ static int mv_bit_cost_local(int ref_idx, int mvx_q4, int mvy_q4)
 
 static int adaptive_skip_threshold_4x4_local(int qp)
 {
-    int threshold = 6 + ((qp * 3) >> 2);
+    int threshold = 8 + ((qp * 7) >> 3);
     if (threshold < 8)
         threshold = 8;
     if (threshold > 48)
@@ -513,6 +517,8 @@ static int choose_partition_plan_8x8(N148EncoderCtx* ctx,
 static int encode_one_block(N148EncoderCtx* ctx,
                             N148BsWriter* bs,
                             N148CabacSession* cabac_session,
+                            N148SlicePlan* slice_plan,
+                            int slice_id,
                             const uint8_t* src_plane,
                             uint8_t* recon_plane,
                             const uint8_t* const* ref_planes,
@@ -619,7 +625,7 @@ static int encode_one_block(N148EncoderCtx* ctx,
             ref_idx == 0 &&
             mvx_q4 == 0 &&
             mvy_q4 == 0 &&
-            coeff_count <= 0) {
+            coeff_count <= 1) {
             final_mode = 0;
         }
     }
@@ -655,6 +661,9 @@ static int encode_one_block(N148EncoderCtx* ctx,
     }
 
     if (final_mode == 0) {
+        n148_slice_plan_note_block(slice_plan, slice_id,
+                                   sample_stride != 1 || sample_offset != 0,
+                                   final_mode, 0);
         memcpy(recon_u8, pred, sizeof(recon_u8));
         store_block(recon_plane, stride, width, height,
                     bx, by, sample_stride, sample_offset, recon_u8);
@@ -697,6 +706,10 @@ static int encode_one_block(N148EncoderCtx* ctx,
             recon_u8[i] = clip_u8((int)pred[i] + (int)spatial[i]);
     }
 
+    n148_slice_plan_note_block(slice_plan, slice_id,
+                               sample_stride != 1 || sample_offset != 0,
+                               final_mode, coeff_count);
+
     store_block(recon_plane, stride, width, height,
                 bx, by, sample_stride, sample_offset, recon_u8);
 
@@ -720,6 +733,8 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
     int mb_cols = (ctx->width + 15) / 16;
     int mb_rows = (ctx->height + 15) / 16;
     int mb_x, mb_y, blk_x, blk_y, ch;
+
+    n148_slice_plan_init(&ctx->slice_plan, mb_cols, mb_rows, ctx->requested_slice_count);
 
     {
         int ri;
@@ -766,6 +781,8 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
 
     for (mb_y = 0; mb_y < mb_rows; mb_y++) {
         for (mb_x = 0; mb_x < mb_cols; mb_x++) {
+            int slice_id = n148_slice_plan_slice_for_mb_row(&ctx->slice_plan, mb_y);
+
             n148_inter_ctx_set_mb_pos(&ctx->inter_ctx, mb_x, mb_y);
 
             for (blk_y = 0; blk_y < 4; blk_y += 2) {
@@ -805,6 +822,8 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
                             if (encode_one_block(ctx,
                                                  &bs,
                                                  cabac_active ? &cabac_sess : NULL,
+                                                 &ctx->slice_plan,
+                                                 slice_id,
                                                  src_y,
                                                  recon_y,
                                                  ref_y,
@@ -837,6 +856,8 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
                             if (encode_one_block(ctx,
                                                  &bs,
                                                  cabac_active ? &cabac_sess : NULL,
+                                                 &ctx->slice_plan,
+                                                 slice_id,
                                                  src_uv,
                                                  recon_uv,
                                                  ref_uv,
@@ -1289,6 +1310,7 @@ static int n148_create_wrapper(void** out, int width, int height, int fps, int b
 
     ctx->max_bframes = 0;
     ctx->reorder_delay = 0;
+    ctx->requested_slice_count = 1;
 
     N148_ENC_LOG("create: %dx%d fps=%d bitrate=%dk profile=%d entropy=%d",
                 width, height, fps, bitrate_kbps,

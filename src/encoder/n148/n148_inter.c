@@ -39,7 +39,7 @@ static int decision_margin_inter_vs_intra(int lambda)
 
 static int adaptive_skip_threshold_4x4(int qp, int sample_stride, int sample_offset)
 {
-    int threshold = 8 + ((qp * 7) >> 3);
+    int threshold = 10 + qp;
 
     if (sample_stride != 1 || sample_offset != 0)
         threshold += 6;
@@ -53,7 +53,7 @@ static int adaptive_skip_threshold_4x4(int qp, int sample_stride, int sample_off
 
 static int adaptive_skip_threshold_8x8(int qp)
 {
-    int threshold = 20 + qp;
+    int threshold = 24 + qp + (qp >> 2);
 
     if (threshold < 20)
         threshold = 20;
