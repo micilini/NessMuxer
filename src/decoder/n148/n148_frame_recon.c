@@ -1,6 +1,7 @@
 #include "n148_frame_recon.h"
 #include <string.h>
 #include <stdlib.h>
+#include "../../common/x86/n148_pixel_sse2.h"
 
 
 
@@ -95,6 +96,12 @@ void n148_intra_pred_4x4(uint8_t* dst, int stride, int mode,
         if (has_left)  { for (y = 0; y < 4; y++) { sum += left[y]; }  count += 4; }
         {
             uint8_t dc = count > 0 ? (uint8_t)((sum + count / 2) / count) : 128;
+#if N148_HAVE_SSE2
+            if (stride == 4) {
+                _mm_storeu_si128((__m128i*)dst, _mm_set1_epi8((char)dc));
+                break;
+            }
+#endif
             for (y = 0; y < 4; y++)
                 for (x = 0; x < 4; x++)
                     dst[y * stride + x] = dc;
@@ -103,6 +110,17 @@ void n148_intra_pred_4x4(uint8_t* dst, int stride, int mode,
     }
 
     case N148_INTRA_HORIZONTAL:
+#if N148_HAVE_SSE2
+        if (stride == 4) {
+            uint32_t row0 = (has_left ? left[0] : 128) * 0x01010101u;
+            uint32_t row1 = (has_left ? left[1] : 128) * 0x01010101u;
+            uint32_t row2 = (has_left ? left[2] : 128) * 0x01010101u;
+            uint32_t row3 = (has_left ? left[3] : 128) * 0x01010101u;
+            __m128i block = _mm_set_epi32((int)row3, (int)row2, (int)row1, (int)row0);
+            _mm_storeu_si128((__m128i*)dst, block);
+            break;
+        }
+#endif
         for (y = 0; y < 4; y++) {
             uint8_t val = has_left ? left[y] : 128;
             for (x = 0; x < 4; x++)
@@ -111,6 +129,17 @@ void n148_intra_pred_4x4(uint8_t* dst, int stride, int mode,
         break;
 
     case N148_INTRA_VERTICAL:
+#if N148_HAVE_SSE2
+        if (stride == 4) {
+            uint32_t row = 0x80808080u;
+            __m128i block;
+            if (has_above)
+                memcpy(&row, above, sizeof(uint32_t));
+            block = _mm_shuffle_epi32(_mm_cvtsi32_si128((int)row), 0x00);
+            _mm_storeu_si128((__m128i*)dst, block);
+            break;
+        }
+#endif
         for (y = 0; y < 4; y++)
             for (x = 0; x < 4; x++)
                 dst[y * stride + x] = has_above ? above[x] : 128;

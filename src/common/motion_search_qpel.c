@@ -4,6 +4,7 @@
 
 #include <limits.h>
 #include <string.h>
+#include "x86/n148_pixel_sse2.h"
 
 static const int g_hpel_pattern[8][2] = {
     { -2,  0 },
@@ -87,12 +88,16 @@ static int block_sad_qpel_4x4(const uint8_t cur[16],
                                mvx_q4, mvy_q4,
                                sample_stride, sample_offset);
 
+#if N148_HAVE_SSE2
+    return n148_sse2_sad_flat16(cur, pred);
+#else
     for (i = 0; i < 16; i++) {
         int d = (int)cur[i] - (int)pred[i];
         sad += abs_val(d);
     }
 
     return sad;
+#endif
 }
 
 int n148_qpel_sad_4x4(const uint8_t* cur, int cur_stride,

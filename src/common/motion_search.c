@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include "x86/n148_pixel_sse2.h"
 
 static const int g_diamond_small[4][2] = {
     {  0, -1 },
@@ -69,6 +70,9 @@ static inline int median3(int a, int b, int c)
 int n148_sad_4x4(const uint8_t* cur, int cur_stride,
                  const uint8_t* ref, int ref_stride)
 {
+#if N148_HAVE_SSE2
+    return n148_sse2_sad_4x4(cur, cur_stride, ref, ref_stride);
+#else
     int sad = 0;
     int y, x;
     for (y = 0; y < 4; y++) {
@@ -78,11 +82,15 @@ int n148_sad_4x4(const uint8_t* cur, int cur_stride,
         }
     }
     return sad;
+#endif
 }
 
 int n148_sad_8x8(const uint8_t* cur, int cur_stride,
                  const uint8_t* ref, int ref_stride)
 {
+#if N148_HAVE_SSE2
+    return n148_sse2_sad_8x8(cur, cur_stride, ref, ref_stride);
+#else
     int sad = 0;
     int y, x;
     for (y = 0; y < 8; y++) {
@@ -92,11 +100,15 @@ int n148_sad_8x8(const uint8_t* cur, int cur_stride,
         }
     }
     return sad;
+#endif
 }
 
 int n148_sad_16x16(const uint8_t* cur, int cur_stride,
                    const uint8_t* ref, int ref_stride)
 {
+#if N148_HAVE_SSE2
+    return n148_sse2_sad_16x16(cur, cur_stride, ref, ref_stride);
+#else
     int sad = 0;
     int y, x;
     for (y = 0; y < 16; y++) {
@@ -106,6 +118,7 @@ int n148_sad_16x16(const uint8_t* cur, int cur_stride,
         }
     }
     return sad;
+#endif
 }
 
 static void hadamard_4x4(const int16_t in[16], int16_t out[16])

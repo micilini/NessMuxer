@@ -22,6 +22,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include "../../common/x86/n148_pixel_sse2.h"
 #include <stdio.h>
 
 #define N148_ENC_LOG(fmt, ...) \
@@ -201,6 +202,10 @@ static int block_sad_from_buffers(const uint8_t src[16], const uint8_t pred[16],
     if (!out_sad)
         return -1;
 
+#if N148_HAVE_SSE2
+    *out_sad = n148_sse2_sad_flat16(src, pred);
+    return 0;
+#else
     for (i = 0; i < 16; i++) {
         int d = (int)src[i] - (int)pred[i];
         sad += (d < 0) ? -d : d;
@@ -208,6 +213,7 @@ static int block_sad_from_buffers(const uint8_t src[16], const uint8_t pred[16],
 
     *out_sad = sad;
     return 0;
+#endif
 }
 
 static void build_inter_prediction_4x4(const uint8_t* ref_plane, int stride,
