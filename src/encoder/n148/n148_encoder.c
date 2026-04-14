@@ -863,7 +863,6 @@ static int encode_frame_slice(N148EncoderCtx* ctx,
     if (frame_type != N148_FRAME_B) {
         push_reference_frame(ctx, recon_y, recon_uv, y_size, uv_size);
 
-        /* Swap MV fields for temporal prediction */
         {
             N148MVField temp = ctx->mv_field_prev;
             ctx->mv_field_prev = ctx->mv_field_cur;
@@ -1188,7 +1187,6 @@ static void n148_apply_runtime_profile_settings(N148EncoderCtx* ctx)
             ctx->max_refs = 2;
         ctx->inter_ctx.me_config.subpel_refine = 2;
     } else {
-        /* Main/CAVLC fast path: obey profile limits and avoid expensive sub-pel work. */
         ctx->enable_qpel = 0;
         if (ctx->search_range > 4)
             ctx->search_range = 4;
