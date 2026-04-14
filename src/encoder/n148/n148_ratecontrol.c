@@ -9,6 +9,7 @@
 
 
 #define COMPLEXITY_ALPHA 0.2
+#define BITS_EMA_ALPHA  0.35
 
 static int clamp_qp(const N148RateControl* rc, int qp)
 {
@@ -48,6 +49,9 @@ int n148_rc_init(N148RateControl* rc, N148RcMode mode,
     rc->buffer_fullness = rc->buffer_size * 0.5;
 
     rc->avg_complexity = 1.0;
+    rc->recent_complexity_ema = 1.0;
+    rc->recent_bits_ema = rc->bits_per_frame_target;
+    rc->last_frame_complexity = 1.0;
 
     return 0;
 }
@@ -74,18 +78,25 @@ int n148_rc_get_frame_qp(N148RateControl* rc, int frame_type)
 
    
     {
-        double error;        
+        double avg_bits;
+        double error;
         double derivative;
         double pid_output;
+        double recent_ratio;
+        double long_ratio;
+        double fullness_norm;
+        double fullness_term;
+        double complexity_term;
+        double qp_adj;
 
-        error = rc->bits_per_frame_target - 
-                (rc->total_frames_coded > 0
-                    ? rc->total_bits_spent / (double)rc->total_frames_coded
-                    : rc->bits_per_frame_target);
+        avg_bits = (rc->total_frames_coded > 0)
+                 ? (rc->total_bits_spent / (double)rc->total_frames_coded)
+                 : rc->bits_per_frame_target;
+
+        error = rc->bits_per_frame_target - avg_bits;
 
         rc->pid_integral += error;
 
-       
         if (rc->pid_integral > rc->bits_per_frame_target * 10.0)
             rc->pid_integral = rc->bits_per_frame_target * 10.0;
         if (rc->pid_integral < -rc->bits_per_frame_target * 10.0)
@@ -98,13 +109,33 @@ int n148_rc_get_frame_qp(N148RateControl* rc, int frame_type)
                    + PID_KI * rc->pid_integral
                    + PID_KD * derivative;
 
-       
-        {
-            double qp_adj = -pid_output / (rc->bits_per_frame_target * 0.1 + 1.0);
-            qp = (int)(rc->base_qp + qp_adj + 0.5);
+        recent_ratio = (rc->bits_per_frame_target > 0.0)
+                     ? (rc->recent_bits_ema / rc->bits_per_frame_target) - 1.0
+                     : 0.0;
+        long_ratio = (rc->bits_per_frame_target > 0.0)
+                   ? (avg_bits / rc->bits_per_frame_target) - 1.0
+                   : 0.0;
+        fullness_norm = (rc->buffer_size > 0.0)
+                      ? (rc->buffer_fullness / rc->buffer_size)
+                      : 0.5;
+        fullness_term = (0.5 - fullness_norm) * 3.5;
+        complexity_term = 0.0;
+        if (rc->avg_complexity > 1.0 && rc->last_frame_complexity > 0.0) {
+            double rel = rc->last_frame_complexity / rc->avg_complexity;
+            if (rel < 0.85 && recent_ratio > 0.02)
+                complexity_term += (0.85 - rel) * 2.0;
+            else if (rel > 1.20 && recent_ratio < -0.05)
+                complexity_term -= (rel - 1.20) * 1.5;
         }
 
-       
+        qp_adj = -pid_output / (rc->bits_per_frame_target * 0.14 + 1.0);
+        qp_adj += recent_ratio * 4.5;
+        qp_adj += long_ratio * 3.0;
+        qp_adj += fullness_term;
+        qp_adj += complexity_term;
+
+        qp = (int)floor(rc->base_qp + qp_adj + 0.5);
+
         switch (frame_type) {
             case 1: qp += rc->qp_offset_i; break;
             case 2: qp += rc->qp_offset_p; break;
@@ -128,30 +159,33 @@ void n148_rc_update(N148RateControl* rc, int frame_type,
     rc->total_frames_coded++;
 
    
+    rc->recent_bits_ema = rc->recent_bits_ema * (1.0 - BITS_EMA_ALPHA)
+                        + (double)bits_used * BITS_EMA_ALPHA;
+
     if (frame_complexity > 0.0) {
+        rc->last_frame_complexity = frame_complexity;
         rc->complexity_sum += frame_complexity;
         rc->avg_complexity = rc->avg_complexity * (1.0 - COMPLEXITY_ALPHA)
                            + frame_complexity * COMPLEXITY_ALPHA;
+        rc->recent_complexity_ema = rc->recent_complexity_ema * (1.0 - COMPLEXITY_ALPHA)
+                                  + frame_complexity * COMPLEXITY_ALPHA;
     }
 
-   
     if (rc->buffer_size > 0.0) {
         rc->buffer_fullness += rc->bits_per_frame_target - (double)bits_used;
 
-       
         if (rc->buffer_fullness < 0.0)
             rc->buffer_fullness = 0.0;
         if (rc->buffer_fullness > rc->buffer_size)
             rc->buffer_fullness = rc->buffer_size;
 
-       
-        if (rc->buffer_fullness < rc->buffer_size * 0.1) {
-           
-            if (rc->base_qp < rc->qp_max - 2)
-                rc->base_qp += 2;
-        } else if (rc->buffer_fullness > rc->buffer_size * 0.9) {
-           
-            if (rc->base_qp > rc->qp_min + 2)
+        if (rc->recent_bits_ema > rc->bits_per_frame_target * 1.10 ||
+            rc->buffer_fullness < rc->buffer_size * 0.18) {
+            if (rc->base_qp < rc->qp_max - 1)
+                rc->base_qp += 1;
+        } else if (rc->recent_bits_ema < rc->bits_per_frame_target * 0.85 &&
+                   rc->buffer_fullness > rc->buffer_size * 0.72) {
+            if (rc->base_qp > rc->qp_min + 1)
                 rc->base_qp -= 1;
         }
     }

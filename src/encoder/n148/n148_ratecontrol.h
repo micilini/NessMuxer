@@ -33,6 +33,9 @@ typedef struct {
     int    total_frames_coded;
     double avg_complexity;     
     double complexity_sum;
+    double recent_bits_ema;
+    double recent_complexity_ema;
+    double last_frame_complexity;
 
    
     double pid_integral;
