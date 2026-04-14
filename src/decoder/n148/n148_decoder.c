@@ -15,8 +15,12 @@
 #include <string.h>
 #include <stdio.h>
 
+#ifdef N148_DEC_VERBOSE
 #define N148_DEC_LOG(fmt, ...) \
     fprintf(stderr, "[N148 DEC] " fmt "\n", ##__VA_ARGS__)
+#else
+#define N148_DEC_LOG(fmt, ...) ((void)0)
+#endif
 
 #define N148_MAX_NALS 64
 

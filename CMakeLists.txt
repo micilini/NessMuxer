@@ -334,6 +334,11 @@ set(N148_FULL_SOURCES
     src/encoder/n148/n148_reorder.c
 )
 
+add_library(n148_full_obj OBJECT
+    ${N148_FULL_SOURCES}
+)
+target_include_directories(n148_full_obj PUBLIC src)
+
 add_executable(test_n148_codec
     test/test_n148_codec.c
     src/codec/n148/n148_bitstream.c
@@ -372,7 +377,7 @@ target_include_directories(test_n148_mux PRIVATE src)
 
 add_executable(test_n148_encoder
     test/test_n148_encoder.c
-    ${N148_FULL_SOURCES}
+    $<TARGET_OBJECTS:n148_full_obj>
 )
 target_include_directories(test_n148_encoder PRIVATE src)
 
@@ -382,13 +387,13 @@ add_executable(test_n148_phase7_epic
     src/ebml_writer.c
     src/buffered_io.c
     src/avc_utils.c
-    ${N148_FULL_SOURCES}
+    $<TARGET_OBJECTS:n148_full_obj>
 )
 target_include_directories(test_n148_phase7_epic PRIVATE src)
 
 add_executable(test_n148_roundtrip
     test/test_n148_roundtrip.c
-    ${N148_FULL_SOURCES}
+    $<TARGET_OBJECTS:n148_full_obj>
 )
 target_include_directories(test_n148_roundtrip PRIVATE src)
 
@@ -412,7 +417,7 @@ target_include_directories(test_n148_gop_planner PRIVATE src)
 
 add_executable(test_n148_cabac
     test/test_n148_cabac.c
-    ${N148_FULL_SOURCES}
+    $<TARGET_OBJECTS:n148_full_obj>
 )
 target_include_directories(test_n148_cabac PRIVATE
     src
@@ -432,13 +437,13 @@ target_include_directories(test_n148_cabac_engine PRIVATE src)
 
 add_executable(test_n148_cabac_slice_roundtrip
     test/test_n148_cabac_slice_roundtrip.c
-    ${N148_FULL_SOURCES}
+    $<TARGET_OBJECTS:n148_full_obj>
 )
 target_include_directories(test_n148_cabac_slice_roundtrip PRIVATE src)
 
 add_executable(test_n148_cabac_conformance_small
     test/test_n148_cabac_conformance_small.c
-    ${N148_FULL_SOURCES}
+    $<TARGET_OBJECTS:n148_full_obj>
 )
 target_include_directories(test_n148_cabac_conformance_small PRIVATE src)
 
@@ -473,7 +478,7 @@ target_include_directories(test_n148_profiles PRIVATE src)
 # --- FASE 9 tools test ---
 add_executable(test_n148_tools
     test/test_n148_tools.c
-    ${N148_FULL_SOURCES}
+    $<TARGET_OBJECTS:n148_full_obj>
     src/common/n148_metrics.c
 )
 target_include_directories(test_n148_tools PRIVATE src)
@@ -544,6 +549,6 @@ endif()
 
 add_executable(n148enc
     tools/n148enc.c
-    ${N148_FULL_SOURCES}
+    $<TARGET_OBJECTS:n148_full_obj>
 )
 target_include_directories(n148enc PRIVATE src)

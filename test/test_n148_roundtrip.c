@@ -102,53 +102,56 @@ int main(void)
     for (i = 0; i < 16; i++)
         frame2[10 * 64 + 14 + i] = 180;
 
-    if (g_n148_encoder_vtable.get_codec_private(enc, &cp, &cp_size) != 0)
+    if (n148_encoder_set_bframes_for_tests(enc, 1) != 0)
         return 3;
 
-    if (g_n148_encoder_vtable.submit_frame(enc, frame0, frame_size) != 0)
-        return 4;
-    if (g_n148_encoder_vtable.receive_packets(enc, collect_packet, NULL) != 0)
+    if (g_n148_encoder_vtable.get_codec_private(enc, &cp, &cp_size) != 0)
         return 5;
 
-    if (g_n148_encoder_vtable.submit_frame(enc, frame1, frame_size) != 0)
-        return 6;
+    if (g_n148_encoder_vtable.submit_frame(enc, frame0, frame_size) != 0)
+        return 5;
     if (g_n148_encoder_vtable.receive_packets(enc, collect_packet, NULL) != 0)
+        return 6;
+
+    if (g_n148_encoder_vtable.submit_frame(enc, frame1, frame_size) != 0)
         return 7;
+    if (g_n148_encoder_vtable.receive_packets(enc, collect_packet, NULL) != 0)
+        return 8;
 
     if (g_n148_encoder_vtable.submit_frame(enc, frame2, frame_size) != 0)
-        return 8;
-    if (g_n148_encoder_vtable.receive_packets(enc, collect_packet, NULL) != 0)
         return 9;
-
-    if (g_n148_encoder_vtable.drain(enc, collect_packet, NULL) != 0)
+    if (g_n148_encoder_vtable.receive_packets(enc, collect_packet, NULL) != 0)
         return 10;
 
-    if (g_packet_count != 3)
+    if (g_n148_encoder_vtable.drain(enc, collect_packet, NULL) != 0)
         return 11;
 
-    if (n148_decoder_create(&dec) != 0)
+    if (g_packet_count != 3)
         return 12;
-    if (n148_decoder_init_from_seq_header(dec, cp, cp_size) != 0)
+
+    if (n148_decoder_create(&dec) != 0)
         return 13;
+    if (n148_decoder_init_from_seq_header(dec, cp, cp_size) != 0)
+        return 14;
 
     ret = n148_decoder_decode(dec, g_packets[0], g_packet_sizes[0], &out);
     if (ret != 0 || out.frame_type != N148_FRAME_I)
-        return 14;
+        return 15;
 
     ret = n148_decoder_decode(dec, g_packets[1], g_packet_sizes[1], &out);
     if (ret != 1)
-        return 15;
+        return 16;
 
     ret = n148_decoder_decode(dec, g_packets[2], g_packet_sizes[2], &out);
     if (ret != 0 || out.frame_type != N148_FRAME_B)
-        return 16;
+        return 17;
 
     ret = n148_decoder_flush(dec, &out);
     if (ret != 0 || out.frame_type != N148_FRAME_P)
-        return 17;
+        return 18;
 
     if (g_packet_sizes[2] >= g_packet_sizes[0])
-        return 18;
+        return 19;
 
     printf("=== N.148 Roundtrip B-frame Test (Fase D) ===\n");
     printf("  [PASS] coding order com 3 pacotes (I / P / B)\n");

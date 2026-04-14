@@ -33,12 +33,20 @@ set "RAW_FILE=C:\Users\sdanz\Documents\NessStudio\Recordings\20260405_210620\scr
 set "TEST_OUTPUT_DIR=%PROJECT_DIR%test_output"
 
 :: =========================================================================
-:: Parse argument
+:: Parse arguments
 :: =========================================================================
 set "BUILD_MODE=default"
-if /i "%~1"=="x264"  set "BUILD_MODE=x264"
-if /i "%~1"=="nvenc" set "BUILD_MODE=nvenc"
-if /i "%~1"=="all"   set "BUILD_MODE=all"
+set "RUN_BENCH=ON"
+set "BENCH_FRAMES=60"
+
+for %%A in (%*) do (
+    if /i "%%~A"=="x264"      set "BUILD_MODE=x264"
+    if /i "%%~A"=="nvenc"     set "BUILD_MODE=nvenc"
+    if /i "%%~A"=="all"       set "BUILD_MODE=all"
+    if /i "%%~A"=="quickbench" set "BENCH_FRAMES=60"
+    if /i "%%~A"=="fullbench"  set "BENCH_FRAMES=300"
+    if /i "%%~A"=="nobench"    set "RUN_BENCH=OFF"
+)
 
 set "USE_X264=OFF"
 set "USE_NVENC=OFF"
@@ -63,6 +71,7 @@ echo  X264:     %USE_X264%
 echo  NVENC:    %USE_NVENC%
 echo  N.148:    ON
 echo  Raw file: %RAW_FILE%
+echo  Bench:    %RUN_BENCH% (%BENCH_FRAMES% frames per preset)
 echo ===================================================================
 echo.
 
@@ -100,7 +109,7 @@ echo.
 echo [2/5] Building Release...
 echo.
 
-cmake --build "%BUILD_DIR%" --config Release
+cmake --build "%BUILD_DIR%" --config Release --parallel
 if %errorlevel% neq 0 (
     echo.
     echo [FAIL] Build failed!
@@ -560,29 +569,38 @@ if "%USE_NVENC%"=="ON" if exist "%TEST_OUTPUT_DIR%\screen_nvenc.mkv" (
 :: STEP 5 - Benchmark
 :: =========================================================================
 :benchmark
+if /i "%RUN_BENCH%"=="OFF" (
+    echo [5/5] Benchmark skipped.
+    echo.
+    goto :summary
+)
+
 echo [5/5] Running benchmark...
+echo.
+echo  Tip: use quickbench ^(default^), fullbench or nobench.
 echo.
 
 echo --- Benchmark (encoder: auto) ---
-"%RELEASE_DIR%\nessmux_bench.exe" --encoder auto
+"%RELEASE_DIR%\nessmux_bench.exe" --encoder auto --frames %BENCH_FRAMES%
 echo.
 
 echo --- Benchmark (encoder: n148) ---
-"%RELEASE_DIR%\nessmux_bench.exe" --encoder n148
+"%RELEASE_DIR%\nessmux_bench.exe" --encoder n148 --frames %BENCH_FRAMES%
 echo.
 
 if "%USE_X264%"=="ON" (
     echo --- Benchmark (encoder: x264) ---
-    "%RELEASE_DIR%\nessmux_bench.exe" --encoder x264
+    "%RELEASE_DIR%\nessmux_bench.exe" --encoder x264 --frames %BENCH_FRAMES%
     echo.
 )
 
 if "%USE_NVENC%"=="ON" (
     echo --- Benchmark (encoder: nvenc) ---
-    "%RELEASE_DIR%\nessmux_bench.exe" --encoder nvenc
+    "%RELEASE_DIR%\nessmux_bench.exe" --encoder nvenc --frames %BENCH_FRAMES%
     echo.
 )
 
+:summary
 :: =========================================================================
 :: Final summary
 :: =========================================================================
