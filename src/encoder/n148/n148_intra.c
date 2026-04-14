@@ -4,6 +4,7 @@
 #include "n148_profiles.h"
 #include "../../decoder/n148/n148_frame_recon.h"
 #include "../../codec/n148/n148_spec.h"
+#include "../../common/x86/n148_pixel_sse2.h"
 
 #include <limits.h>
 #include <string.h>
@@ -41,6 +42,9 @@ static int abs_val(int v)
 
 static int estimate_satd_4x4(const uint8_t src[16], const uint8_t pred[16])
 {
+#if N148_HAVE_SSE2
+    return n148_sse2_intra_estimate_satd_flat16(src, pred);
+#else
     int satd = 0;
     int y, x;
 
@@ -79,6 +83,7 @@ static int estimate_satd_4x4(const uint8_t src[16], const uint8_t pred[16])
     }
 
     return satd >> 1;
+#endif
 }
 
 static int estimate_coeff_count_4x4(const uint8_t src[16], const uint8_t pred[16], int qp, int is_chroma)

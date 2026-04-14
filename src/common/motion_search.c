@@ -150,6 +150,9 @@ static void hadamard_4x4(const int16_t in[16], int16_t out[16])
 int n148_satd_4x4(const uint8_t* cur, int cur_stride,
                   const uint8_t* ref, int ref_stride)
 {
+#if N148_HAVE_SSE2
+    return n148_sse2_satd_4x4(cur, cur_stride, ref, ref_stride);
+#else
     int16_t diff[16];
     int16_t hadamard[16];
     int satd = 0;
@@ -164,6 +167,7 @@ int n148_satd_4x4(const uint8_t* cur, int cur_stride,
         satd += abs_val(hadamard[i]);
     }
     return (satd + 1) >> 1;
+#endif
 }
 
 int n148_satd_8x8(const uint8_t* cur, int cur_stride,
