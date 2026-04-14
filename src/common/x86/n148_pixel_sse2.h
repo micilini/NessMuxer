@@ -162,6 +162,76 @@ static inline int n148_sse2_intra_estimate_satd_flat16(const uint8_t src[16], co
     return n148_sse2_hsum_epi32(sum32) >> 1;
 }
 
+
+
+static inline void n148_sse2_transpose4x4_epi16(__m128i a0, __m128i a1, __m128i a2, __m128i a3,
+                                                __m128i* o0, __m128i* o1, __m128i* o2, __m128i* o3)
+{
+    __m128i u0 = _mm_unpacklo_epi16(a0, a1);
+    __m128i u1 = _mm_unpacklo_epi16(a2, a3);
+    __m128i v0 = _mm_unpacklo_epi32(u0, u1);
+    __m128i v1 = _mm_unpackhi_epi32(u0, u1);
+
+    *o0 = v0;
+    *o1 = _mm_srli_si128(v0, 8);
+    *o2 = v1;
+    *o3 = _mm_srli_si128(v1, 8);
+}
+
+static inline __m128i n148_sse2_fdct_1d4_epi16(__m128i r)
+{
+    __m128i rev = _mm_shufflelo_epi16(r, _MM_SHUFFLE(0, 1, 2, 3));
+    __m128i sum = _mm_add_epi16(r, rev);
+    __m128i diff = _mm_sub_epi16(r, rev);
+    __m128i sum_swap = _mm_shufflelo_epi16(sum, _MM_SHUFFLE(3, 2, 0, 1));
+    __m128i diff_swap = _mm_shufflelo_epi16(diff, _MM_SHUFFLE(3, 2, 0, 1));
+    __m128i pair_add = _mm_add_epi16(sum, sum_swap);
+    __m128i pair_sub = _mm_sub_epi16(sum, sum_swap);
+    __m128i diff_add = _mm_add_epi16(diff, diff_swap);
+    __m128i diff_sub = _mm_sub_epi16(diff, diff_swap);
+    __m128i lo01 = _mm_unpacklo_epi16(pair_add, diff_add);
+    __m128i lo23 = _mm_unpacklo_epi16(pair_sub, diff_sub);
+    return _mm_unpacklo_epi32(lo01, lo23);
+}
+
+static inline void n148_sse2_fdct_4x4_i16(const int16_t* in, int16_t* out)
+{
+    __m128i r0 = _mm_loadl_epi64((const __m128i*)(in + 0));
+    __m128i r1 = _mm_loadl_epi64((const __m128i*)(in + 4));
+    __m128i r2 = _mm_loadl_epi64((const __m128i*)(in + 8));
+    __m128i r3 = _mm_loadl_epi64((const __m128i*)(in + 12));
+    __m128i t0, t1, t2, t3;
+    __m128i c0, c1, c2, c3;
+    __m128i o0, o1, o2, o3;
+
+    t0 = n148_sse2_fdct_1d4_epi16(r0);
+    t1 = n148_sse2_fdct_1d4_epi16(r1);
+    t2 = n148_sse2_fdct_1d4_epi16(r2);
+    t3 = n148_sse2_fdct_1d4_epi16(r3);
+
+    n148_sse2_transpose4x4_epi16(t0, t1, t2, t3, &c0, &c1, &c2, &c3);
+
+    o0 = n148_sse2_fdct_1d4_epi16(c0);
+    o1 = n148_sse2_fdct_1d4_epi16(c1);
+    o2 = n148_sse2_fdct_1d4_epi16(c2);
+    o3 = n148_sse2_fdct_1d4_epi16(c3);
+
+    n148_sse2_transpose4x4_epi16(o0, o1, o2, o3, &r0, &r1, &r2, &r3);
+
+    _mm_storel_epi64((__m128i*)(out + 0), r0);
+    _mm_storel_epi64((__m128i*)(out + 4), r1);
+    _mm_storel_epi64((__m128i*)(out + 8), r2);
+    _mm_storel_epi64((__m128i*)(out + 12), r3);
+}
+
+static inline void n148_sse2_dequant_4x4_i16(const int16_t* levels, int16_t* coeff, int qstep)
+{
+    __m128i q = _mm_set1_epi16((short)qstep);
+    __m128i lo = _mm_loadu_si128((const __m128i*)levels);
+    __m128i hi = _mm_loadu_si128((const __m128i*)(levels + 8));
+    _mm_storeu_si128((__m128i*)coeff, _mm_mullo_epi16(lo, q));
+    _mm_storeu_si128((__m128i*)(coeff + 8), _mm_mullo_epi16(hi, q));
+}
 static inline int n148_sse2_sad_flat16(const uint8_t a[16], const uint8_t b[16])
 {
     __m128i va = _mm_loadu_si128((const __m128i*)a);
@@ -200,6 +270,117 @@ static inline int n148_sse2_sad_8x8(const uint8_t* cur, int cur_stride,
 }
 
 
+
+static inline void n148_sse2_copy_block_8x8_luma_inbounds(uint8_t out[64],
+                                                           const uint8_t* plane,
+                                                           int stride,
+                                                           int x_base,
+                                                           int y_base)
+{
+    int y;
+    for (y = 0; y < 8; y++) {
+        __m128i row = _mm_loadl_epi64((const __m128i*)(plane + (y_base + y) * stride + x_base));
+        _mm_storel_epi64((__m128i*)(out + y * 8), row);
+    }
+}
+
+static inline void n148_sse2_interp_block_8x8_qpel_luma_inbounds(uint8_t out[64],
+                                                                  const uint8_t* plane,
+                                                                  int stride,
+                                                                  int x_base,
+                                                                  int y_base,
+                                                                  int fx,
+                                                                  int fy)
+{
+    const __m128i zero = _mm_setzero_si128();
+    int y;
+
+    if (fy == 0 && fx == 2) {
+        for (y = 0; y < 8; y++) {
+            const uint8_t* row = plane + (y_base + y) * stride + x_base;
+            __m128i a = _mm_loadl_epi64((const __m128i*)row);
+            __m128i b = _mm_loadl_epi64((const __m128i*)(row + 1));
+            __m128i avg = _mm_avg_epu8(a, b);
+            _mm_storel_epi64((__m128i*)(out + y * 8), avg);
+        }
+        return;
+    }
+
+    if (fx == 0 && fy == 2) {
+        for (y = 0; y < 8; y++) {
+            const uint8_t* row0 = plane + (y_base + y) * stride + x_base;
+            const uint8_t* row1 = row0 + stride;
+            __m128i a = _mm_loadl_epi64((const __m128i*)row0);
+            __m128i b = _mm_loadl_epi64((const __m128i*)row1);
+            __m128i avg = _mm_avg_epu8(a, b);
+            _mm_storel_epi64((__m128i*)(out + y * 8), avg);
+        }
+        return;
+    }
+
+    if (fx == 2 && fy == 2) {
+        const __m128i bias2 = _mm_set1_epi16(2);
+        for (y = 0; y < 8; y++) {
+            const uint8_t* row0 = plane + (y_base + y) * stride + x_base;
+            const uint8_t* row1 = row0 + stride;
+            __m128i a = _mm_unpacklo_epi8(_mm_loadl_epi64((const __m128i*)row0), zero);
+            __m128i b = _mm_unpacklo_epi8(_mm_loadl_epi64((const __m128i*)(row0 + 1)), zero);
+            __m128i c = _mm_unpacklo_epi8(_mm_loadl_epi64((const __m128i*)row1), zero);
+            __m128i d = _mm_unpacklo_epi8(_mm_loadl_epi64((const __m128i*)(row1 + 1)), zero);
+            __m128i sum = _mm_add_epi16(_mm_add_epi16(a, b), _mm_add_epi16(c, d));
+            __m128i avg = _mm_srli_epi16(_mm_add_epi16(sum, bias2), 2);
+            _mm_storel_epi64((__m128i*)(out + y * 8), _mm_packus_epi16(avg, avg));
+        }
+        return;
+    }
+
+    {
+        const __m128i wx0 = _mm_set1_epi16((short)(4 - fx));
+        const __m128i wx1 = _mm_set1_epi16((short)fx);
+        const __m128i wy0 = _mm_set1_epi16((short)(4 - fy));
+        const __m128i wy1 = _mm_set1_epi16((short)fy);
+        const __m128i bias = _mm_set1_epi16(8);
+
+        for (y = 0; y < 8; y++) {
+            const uint8_t* row0 = plane + (y_base + y) * stride + x_base;
+            const uint8_t* row1 = row0 + stride;
+            __m128i vr00 = _mm_loadl_epi64((const __m128i*)row0);
+            __m128i vr01 = _mm_loadl_epi64((const __m128i*)(row0 + 1));
+            __m128i vr10 = _mm_loadl_epi64((const __m128i*)row1);
+            __m128i vr11 = _mm_loadl_epi64((const __m128i*)(row1 + 1));
+            __m128i top, bot, sum, packed;
+
+            vr00 = _mm_unpacklo_epi8(vr00, zero);
+            vr01 = _mm_unpacklo_epi8(vr01, zero);
+            vr10 = _mm_unpacklo_epi8(vr10, zero);
+            vr11 = _mm_unpacklo_epi8(vr11, zero);
+
+            top = _mm_add_epi16(_mm_mullo_epi16(vr00, wx0), _mm_mullo_epi16(vr01, wx1));
+            bot = _mm_add_epi16(_mm_mullo_epi16(vr10, wx0), _mm_mullo_epi16(vr11, wx1));
+            sum = _mm_add_epi16(_mm_mullo_epi16(top, wy0), _mm_mullo_epi16(bot, wy1));
+            sum = _mm_srli_epi16(_mm_add_epi16(sum, bias), 4);
+            packed = _mm_packus_epi16(sum, sum);
+            _mm_storel_epi64((__m128i*)(out + y * 8), packed);
+        }
+    }
+}
+
+static inline void n148_sse2_copy_block_4x4_luma_inbounds(uint8_t out[16],
+                                                           const uint8_t* plane,
+                                                           int stride,
+                                                           int x_base,
+                                                           int y_base)
+{
+    uint32_t r0 = 0, r1 = 0, r2 = 0, r3 = 0;
+    __m128i block;
+    memcpy(&r0, plane + (y_base + 0) * stride + x_base, sizeof(uint32_t));
+    memcpy(&r1, plane + (y_base + 1) * stride + x_base, sizeof(uint32_t));
+    memcpy(&r2, plane + (y_base + 2) * stride + x_base, sizeof(uint32_t));
+    memcpy(&r3, plane + (y_base + 3) * stride + x_base, sizeof(uint32_t));
+    block = _mm_set_epi32((int)r3, (int)r2, (int)r1, (int)r0);
+    _mm_storeu_si128((__m128i*)out, block);
+}
+
 static inline void n148_sse2_interp_block_4x4_qpel_luma_inbounds(uint8_t out[16],
                                                                   const uint8_t* plane,
                                                                   int stride,
@@ -209,36 +390,90 @@ static inline void n148_sse2_interp_block_4x4_qpel_luma_inbounds(uint8_t out[16]
                                                                   int fy)
 {
     const __m128i zero = _mm_setzero_si128();
-    const __m128i wx0 = _mm_set1_epi16((short)(4 - fx));
-    const __m128i wx1 = _mm_set1_epi16((short)fx);
-    const __m128i wy0 = _mm_set1_epi16((short)(4 - fy));
-    const __m128i wy1 = _mm_set1_epi16((short)fy);
-    const __m128i bias = _mm_set1_epi16(8);
     int y;
 
-    for (y = 0; y < 4; y++) {
-        const uint8_t* row0 = plane + (y_base + y) * stride + x_base;
-        const uint8_t* row1 = row0 + stride;
-        uint32_t r00 = 0, r01 = 0, r10 = 0, r11 = 0;
-        __m128i vr00, vr01, vr10, vr11;
-        __m128i top, bot, sum, packed;
+    if (fy == 0 && fx == 2) {
+        for (y = 0; y < 4; y++) {
+            const uint8_t* row = plane + (y_base + y) * stride + x_base;
+            uint32_t a32 = 0, b32 = 0;
+            memcpy(&a32, row, sizeof(uint32_t));
+            memcpy(&b32, row + 1, sizeof(uint32_t));
+            __m128i a = _mm_cvtsi32_si128((int)a32);
+            __m128i b = _mm_cvtsi32_si128((int)b32);
+            __m128i avg = _mm_avg_epu8(a, b);
+            memcpy(out + y * 4, &avg, sizeof(uint32_t));
+        }
+        return;
+    }
 
-        memcpy(&r00, row0, sizeof(uint32_t));
-        memcpy(&r01, row0 + 1, sizeof(uint32_t));
-        memcpy(&r10, row1, sizeof(uint32_t));
-        memcpy(&r11, row1 + 1, sizeof(uint32_t));
+    if (fx == 0 && fy == 2) {
+        for (y = 0; y < 4; y++) {
+            const uint8_t* row0 = plane + (y_base + y) * stride + x_base;
+            const uint8_t* row1 = row0 + stride;
+            uint32_t a32 = 0, b32 = 0;
+            memcpy(&a32, row0, sizeof(uint32_t));
+            memcpy(&b32, row1, sizeof(uint32_t));
+            __m128i a = _mm_cvtsi32_si128((int)a32);
+            __m128i b = _mm_cvtsi32_si128((int)b32);
+            __m128i avg = _mm_avg_epu8(a, b);
+            memcpy(out + y * 4, &avg, sizeof(uint32_t));
+        }
+        return;
+    }
 
-        vr00 = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r00), zero);
-        vr01 = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r01), zero);
-        vr10 = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r10), zero);
-        vr11 = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r11), zero);
+    if (fx == 2 && fy == 2) {
+        const __m128i bias2 = _mm_set1_epi16(2);
+        for (y = 0; y < 4; y++) {
+            const uint8_t* row0 = plane + (y_base + y) * stride + x_base;
+            const uint8_t* row1 = row0 + stride;
+            uint32_t r00 = 0, r01 = 0, r10 = 0, r11 = 0;
+            memcpy(&r00, row0, sizeof(uint32_t));
+            memcpy(&r01, row0 + 1, sizeof(uint32_t));
+            memcpy(&r10, row1, sizeof(uint32_t));
+            memcpy(&r11, row1 + 1, sizeof(uint32_t));
+            __m128i a = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r00), zero);
+            __m128i b = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r01), zero);
+            __m128i c = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r10), zero);
+            __m128i d = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r11), zero);
+            __m128i sum = _mm_add_epi16(_mm_add_epi16(a, b), _mm_add_epi16(c, d));
+            __m128i avg = _mm_srli_epi16(_mm_add_epi16(sum, bias2), 2);
+            __m128i packed = _mm_packus_epi16(avg, avg);
+            memcpy(out + y * 4, &packed, sizeof(uint32_t));
+        }
+        return;
+    }
 
-        top = _mm_add_epi16(_mm_mullo_epi16(vr00, wx0), _mm_mullo_epi16(vr01, wx1));
-        bot = _mm_add_epi16(_mm_mullo_epi16(vr10, wx0), _mm_mullo_epi16(vr11, wx1));
-        sum = _mm_add_epi16(_mm_add_epi16(_mm_mullo_epi16(top, wy0), _mm_mullo_epi16(bot, wy1)), bias);
-        sum = _mm_srli_epi16(sum, 4);
-        packed = _mm_packus_epi16(sum, sum);
-        memcpy(out + y * 4, &packed, sizeof(uint32_t));
+    {
+        const __m128i wx0 = _mm_set1_epi16((short)(4 - fx));
+        const __m128i wx1 = _mm_set1_epi16((short)fx);
+        const __m128i wy0 = _mm_set1_epi16((short)(4 - fy));
+        const __m128i wy1 = _mm_set1_epi16((short)fy);
+        const __m128i bias = _mm_set1_epi16(8);
+
+        for (y = 0; y < 4; y++) {
+            const uint8_t* row0 = plane + (y_base + y) * stride + x_base;
+            const uint8_t* row1 = row0 + stride;
+            uint32_t r00 = 0, r01 = 0, r10 = 0, r11 = 0;
+            __m128i vr00, vr01, vr10, vr11;
+            __m128i top, bot, sum, packed;
+
+            memcpy(&r00, row0, sizeof(uint32_t));
+            memcpy(&r01, row0 + 1, sizeof(uint32_t));
+            memcpy(&r10, row1, sizeof(uint32_t));
+            memcpy(&r11, row1 + 1, sizeof(uint32_t));
+
+            vr00 = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r00), zero);
+            vr01 = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r01), zero);
+            vr10 = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r10), zero);
+            vr11 = _mm_unpacklo_epi8(_mm_cvtsi32_si128((int)r11), zero);
+
+            top = _mm_add_epi16(_mm_mullo_epi16(vr00, wx0), _mm_mullo_epi16(vr01, wx1));
+            bot = _mm_add_epi16(_mm_mullo_epi16(vr10, wx0), _mm_mullo_epi16(vr11, wx1));
+            sum = _mm_add_epi16(_mm_add_epi16(_mm_mullo_epi16(top, wy0), _mm_mullo_epi16(bot, wy1)), bias);
+            sum = _mm_srli_epi16(sum, 4);
+            packed = _mm_packus_epi16(sum, sum);
+            memcpy(out + y * 4, &packed, sizeof(uint32_t));
+        }
     }
 }
 

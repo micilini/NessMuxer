@@ -65,6 +65,10 @@ void n148_interp_block_4x4_qpel(uint8_t out[16],
     if (sample_stride == 1 && sample_offset == 0 &&
         x_base >= 0 && y_base >= 0 &&
         x_base + 4 < width && y_base + 4 < height) {
+        if (fx == 0 && fy == 0) {
+            n148_sse2_copy_block_4x4_luma_inbounds(out, plane, stride, x_base, y_base);
+            return;
+        }
         n148_sse2_interp_block_4x4_qpel_luma_inbounds(out, plane, stride,
                                                       x_base, y_base, fx, fy);
         return;
@@ -77,6 +81,48 @@ void n148_interp_block_4x4_qpel(uint8_t out[16],
             int sy_q4 = (by + y) * 4 + mvy_q4;
 
             out[y * 4 + x] = n148_interp_sample_qpel(
+                plane, stride,
+                width, height,
+                sx_q4, sy_q4,
+                sample_stride, sample_offset
+            );
+        }
+    }
+}
+
+
+void n148_interp_block_8x8_qpel(uint8_t out[64],
+                                const uint8_t* plane, int stride,
+                                int width, int height,
+                                int bx, int by,
+                                int mvx_q4, int mvy_q4,
+                                int sample_stride, int sample_offset)
+{
+    int x_base = bx + floor_div4(mvx_q4);
+    int y_base = by + floor_div4(mvy_q4);
+    int fx = mod4_pos(mvx_q4);
+    int fy = mod4_pos(mvy_q4);
+    int y, x;
+
+#if N148_HAVE_SSE2
+    if (sample_stride == 1 && sample_offset == 0 &&
+        x_base >= 0 && y_base >= 0 &&
+        x_base + 8 < width && y_base + 8 < height) {
+        if (fx == 0 && fy == 0) {
+            n148_sse2_copy_block_8x8_luma_inbounds(out, plane, stride, x_base, y_base);
+            return;
+        }
+        n148_sse2_interp_block_8x8_qpel_luma_inbounds(out, plane, stride,
+                                                      x_base, y_base, fx, fy);
+        return;
+    }
+#endif
+
+    for (y = 0; y < 8; y++) {
+        for (x = 0; x < 8; x++) {
+            int sx_q4 = (bx + x) * 4 + mvx_q4;
+            int sy_q4 = (by + y) * 4 + mvy_q4;
+            out[y * 8 + x] = n148_interp_sample_qpel(
                 plane, stride,
                 width, height,
                 sx_q4, sy_q4,

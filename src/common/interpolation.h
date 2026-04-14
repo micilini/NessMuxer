@@ -15,4 +15,11 @@ void n148_interp_block_4x4_qpel(uint8_t out[16],
                                 int mvx_q4, int mvy_q4,
                                 int sample_stride, int sample_offset);
 
+void n148_interp_block_8x8_qpel(uint8_t out[64],
+                                const uint8_t* plane, int stride,
+                                int width, int height,
+                                int bx, int by,
+                                int mvx_q4, int mvy_q4,
+                                int sample_stride, int sample_offset);
+
 #endif

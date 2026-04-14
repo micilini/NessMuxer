@@ -40,6 +40,13 @@ static void load_cur_block_4x4(const uint8_t* plane, int stride,
                                uint8_t out[16])
 {
     int y, x;
+#if N148_HAVE_SSE2
+    if (sample_stride == 1 && sample_offset == 0 &&
+        bx >= 0 && by >= 0 && bx + 4 <= width && by + 4 <= height) {
+        n148_sse2_copy_block_4x4_luma_inbounds(out, plane, stride, bx, by);
+        return;
+    }
+#endif
     for (y = 0; y < 4; y++) {
         for (x = 0; x < 4; x++) {
             int px = bx + x;
@@ -58,6 +65,12 @@ static void load_cur_block_8x8(const uint8_t* plane, int stride,
                                uint8_t out[64])
 {
     int y, x;
+#if N148_HAVE_SSE2
+    if (bx >= 0 && by >= 0 && bx + 8 <= width && by + 8 <= height) {
+        n148_sse2_copy_block_8x8_luma_inbounds(out, plane, stride, bx, by);
+        return;
+    }
+#endif
     for (y = 0; y < 8; y++) {
         for (x = 0; x < 8; x++) {
             int px = bx + x;
@@ -107,9 +120,20 @@ int n148_qpel_sad_4x4(const uint8_t* cur, int cur_stride,
                       int mvx_q4, int mvy_q4)
 {
     uint8_t cur_block[16];
+    uint8_t pred[16];
+
+    n148_interp_block_4x4_qpel(pred,
+                               ref, ref_stride,
+                               width, height,
+                               bx, by,
+                               mvx_q4, mvy_q4,
+                               1, 0);
+
+    if (bx >= 0 && by >= 0 && bx + 4 <= width && by + 4 <= height)
+        return n148_sad_4x4(cur + by * cur_stride + bx, cur_stride, pred, 4);
+
     load_cur_block_4x4(cur, cur_stride, width, height, bx, by, 1, 0, cur_block);
-    return block_sad_qpel_4x4(cur_block, ref, ref_stride, width, height,
-                              bx, by, mvx_q4, mvy_q4, 1, 0);
+    return n148_sad_4x4(cur_block, 4, pred, 4);
 }
 
 int n148_qpel_sad_8x8(const uint8_t* cur, int cur_stride,
@@ -118,16 +142,18 @@ int n148_qpel_sad_8x8(const uint8_t* cur, int cur_stride,
                       int bx, int by,
                       int mvx_q4, int mvy_q4)
 {
-    int sad = 0;
-    sad += n148_qpel_sad_4x4(cur, cur_stride, ref, ref_stride, width, height,
-                             bx, by, mvx_q4, mvy_q4);
-    sad += n148_qpel_sad_4x4(cur, cur_stride, ref, ref_stride, width, height,
-                             bx + 4, by, mvx_q4, mvy_q4);
-    sad += n148_qpel_sad_4x4(cur, cur_stride, ref, ref_stride, width, height,
-                             bx, by + 4, mvx_q4, mvy_q4);
-    sad += n148_qpel_sad_4x4(cur, cur_stride, ref, ref_stride, width, height,
-                             bx + 4, by + 4, mvx_q4, mvy_q4);
-    return sad;
+    uint8_t cur_block[64];
+    uint8_t pred[64];
+    n148_interp_block_8x8_qpel(pred,
+                               ref, ref_stride,
+                               width, height,
+                               bx, by,
+                               mvx_q4, mvy_q4,
+                               1, 0);
+    if (bx >= 0 && by >= 0 && bx + 8 <= width && by + 8 <= height)
+        return n148_sad_8x8(cur + by * cur_stride + bx, cur_stride, pred, 8);
+    load_cur_block_8x8(cur, cur_stride, width, height, bx, by, cur_block);
+    return n148_sad_8x8(cur_block, 8, pred, 8);
 }
 
 static int n148_qpel_satd_4x4(const uint8_t* cur, int cur_stride,
@@ -139,7 +165,6 @@ static int n148_qpel_satd_4x4(const uint8_t* cur, int cur_stride,
     uint8_t cur_block[16];
     uint8_t pred[16];
 
-    load_cur_block_4x4(cur, cur_stride, width, height, bx, by, 1, 0, cur_block);
     n148_interp_block_4x4_qpel(pred,
                                ref, ref_stride,
                                width, height,
@@ -147,6 +172,10 @@ static int n148_qpel_satd_4x4(const uint8_t* cur, int cur_stride,
                                mvx_q4, mvy_q4,
                                1, 0);
 
+    if (bx >= 0 && by >= 0 && bx + 4 <= width && by + 4 <= height)
+        return n148_satd_4x4(cur + by * cur_stride + bx, cur_stride, pred, 4);
+
+    load_cur_block_4x4(cur, cur_stride, width, height, bx, by, 1, 0, cur_block);
     return n148_satd_4x4(cur_block, 4, pred, 4);
 }
 
@@ -156,15 +185,32 @@ static int n148_qpel_satd_8x8(const uint8_t* cur, int cur_stride,
                                int bx, int by,
                                int mvx_q4, int mvy_q4)
 {
+    uint8_t cur_block[64];
+    uint8_t pred[64];
+    const uint8_t* cur_ptr;
+    int cur_s;
     int satd = 0;
-    satd += n148_qpel_satd_4x4(cur, cur_stride, ref, ref_stride, width, height,
-                               bx, by, mvx_q4, mvy_q4);
-    satd += n148_qpel_satd_4x4(cur, cur_stride, ref, ref_stride, width, height,
-                               bx + 4, by, mvx_q4, mvy_q4);
-    satd += n148_qpel_satd_4x4(cur, cur_stride, ref, ref_stride, width, height,
-                               bx, by + 4, mvx_q4, mvy_q4);
-    satd += n148_qpel_satd_4x4(cur, cur_stride, ref, ref_stride, width, height,
-                               bx + 4, by + 4, mvx_q4, mvy_q4);
+
+    n148_interp_block_8x8_qpel(pred,
+                               ref, ref_stride,
+                               width, height,
+                               bx, by,
+                               mvx_q4, mvy_q4,
+                               1, 0);
+
+    if (bx >= 0 && by >= 0 && bx + 8 <= width && by + 8 <= height) {
+        cur_ptr = cur + by * cur_stride + bx;
+        cur_s = cur_stride;
+    } else {
+        load_cur_block_8x8(cur, cur_stride, width, height, bx, by, cur_block);
+        cur_ptr = cur_block;
+        cur_s = 8;
+    }
+
+    satd += n148_satd_4x4(cur_ptr + 0, cur_s, pred + 0, 8);
+    satd += n148_satd_4x4(cur_ptr + 4, cur_s, pred + 4, 8);
+    satd += n148_satd_4x4(cur_ptr + 4 * cur_s, cur_s, pred + 32, 8);
+    satd += n148_satd_4x4(cur_ptr + 4 * cur_s + 4, cur_s, pred + 36, 8);
     return satd;
 }
 

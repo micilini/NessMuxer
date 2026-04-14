@@ -1,4 +1,5 @@
 #include "n148_transform.h"
+#include "../../common/x86/n148_pixel_sse2.h"
 
 static void fdct_1d_4(const int16_t* in, int16_t* out)
 {

@@ -105,26 +105,33 @@ static int refine_inter_cost_satd_8x8(const uint8_t* cur_plane,
 {
     uint8_t pred[64];
     int satd_total = 0;
-    int sub_x, sub_y;
 
     if (!cur_plane || !ref_plane)
         return sad_fallback;
 
-    for (sub_y = 0; sub_y < 8; sub_y += 4) {
-        for (sub_x = 0; sub_x < 8; sub_x += 4) {
-            n148_interp_block_4x4_qpel(pred + sub_y * 8 + sub_x,
-                                       ref_plane, stride,
-                                       width, height,
-                                       bx + sub_x, by + sub_y,
-                                       mvx_q4, mvy_q4,
-                                       1, 0);
+    n148_interp_block_8x8_qpel(pred,
+                               ref_plane, stride,
+                               width, height,
+                               bx, by,
+                               mvx_q4, mvy_q4,
+                               1, 0);
 
-            satd_total += n148_satd_4x4(cur_plane + (by + sub_y) * stride + (bx + sub_x),
-                                        stride,
-                                        pred + sub_y * 8 + sub_x,
-                                        8);
-        }
-    }
+    satd_total += n148_satd_4x4(cur_plane + by * stride + bx,
+                                stride,
+                                pred + 0,
+                                8);
+    satd_total += n148_satd_4x4(cur_plane + by * stride + bx + 4,
+                                stride,
+                                pred + 4,
+                                8);
+    satd_total += n148_satd_4x4(cur_plane + (by + 4) * stride + bx,
+                                stride,
+                                pred + 32,
+                                8);
+    satd_total += n148_satd_4x4(cur_plane + (by + 4) * stride + bx + 4,
+                                stride,
+                                pred + 36,
+                                8);
 
     return ((sad_fallback * 3) + satd_total + 2) >> 2;
 }
