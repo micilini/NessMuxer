@@ -196,7 +196,7 @@ int n148_intra_choose_mode(const uint8_t* src_plane,
         candidate_preds[candidate_count] = pred_best;
         candidate_count++;
 
-        if (second_sad < INT_MAX && second_mode != best_mode) {
+        if (second_sad < INT_MAX && second_mode != best_mode && second_sad <= best_sad + 8) {
             candidate_modes[candidate_count] = second_mode;
             candidate_preds[candidate_count] = pred_second;
             candidate_count++;
