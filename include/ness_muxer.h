@@ -68,6 +68,11 @@ NESS_API int ness_muxer_write_frame(NessMuxer* muxer,
                                      const uint8_t* nv12_data,
                                      int nv12_size);
 
+NESS_API int ness_muxer_write_frame_pts(NessMuxer* muxer,
+                                         const uint8_t* nv12_data,
+                                         int nv12_size,
+                                         int64_t pts_hns);
+
 
 NESS_API int ness_muxer_close(NessMuxer* muxer);
 

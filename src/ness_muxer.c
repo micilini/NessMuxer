@@ -22,6 +22,8 @@ struct NessMuxer {
     NessMuxerConfig         config;
     char                    output_path[1024];
     char                    error[256];
+    int64_t                 pts_override_hns;
+    int                     use_pts_override;
 };
 
 static void set_error(NessMuxer* m, const char* msg)
@@ -81,8 +83,8 @@ static int on_encoded_packet(void* userdata, const NessEncodedPacket* pkt)
 
         mkv_pkt.data = pkt->data;
         mkv_pkt.size = pkt->size;
-        mkv_pkt.pts_hns = pkt->pts_hns;
-        mkv_pkt.dts_hns = pkt->dts_hns;
+        mkv_pkt.pts_hns = m->use_pts_override ? m->pts_override_hns : pkt->pts_hns;
+        mkv_pkt.dts_hns = m->use_pts_override ? m->pts_override_hns : pkt->dts_hns;
         mkv_pkt.is_keyframe = pkt->is_keyframe;
 
         if (mkv_muxer_write_packet(m->muxer, &mkv_pkt) != 0) {
@@ -201,6 +203,38 @@ NESS_API int ness_muxer_write_frame(NessMuxer* muxer,
         return NESS_ERROR;
     }
 
+    return NESS_OK;
+}
+
+int ness_muxer_write_frame_pts(NessMuxer* muxer, const uint8_t* nv12_data, int nv12_size, int64_t pts_hns)
+{
+    int ret;
+    if (!muxer || !nv12_data || nv12_size <= 0)
+        return NESS_ERROR_PARAM;
+
+    if (!muxer->encoder_vtable || !muxer->encoder_vtable->submit_frame || !muxer->encoder_vtable->receive_packets)
+        return NESS_ERROR_STATE;
+
+    muxer->pts_override_hns = pts_hns;
+    muxer->use_pts_override = 1;
+
+    ret = muxer->encoder_vtable->submit_frame(muxer->encoder_ctx, nv12_data, nv12_size);
+    if (ret != 0) {
+        muxer->use_pts_override = 0;
+        set_error(muxer, "encoder submit_frame failed");
+        return NESS_ERROR_ENCODER;
+    }
+
+    ret = muxer->encoder_vtable->receive_packets(muxer->encoder_ctx, on_encoded_packet, muxer);
+    muxer->use_pts_override = 0;
+
+    if (ret < 0) {
+        if (!muxer->error[0])
+            set_error(muxer, "encoder receive_packets failed");
+        return NESS_ERROR_ENCODER;
+    }
+
+    muxer->frames_submitted++;
     return NESS_OK;
 }
 
