@@ -134,7 +134,7 @@ int main(void)
 {
     int rc = 0;
 
-    printf("=== N.148 Rate Control Test (Fase 8.1) ===\n\n");
+    printf("=== N.148 Rate Control Test ===\n\n");
 
     if ((rc = test_cqp_mode()) != 0) return rc;
     if ((rc = test_abr_adapts()) != 0) return rc;

@@ -42,7 +42,7 @@ int main(void)
     n148_reorder_release_frame(&out);
     n148_reorder_free(&q);
 
-    printf("=== N.148 Reorder Queue Test (Fase 6.0-B) ===\n");
+    printf("=== N.148 Reorder Queue Test ===\n");
     printf("  [PASS] fila segura com copy-owning\n");
     printf("  [PASS] lookahead minimo respeitado\n");
     printf("  [PASS] display_index/pts preservados\n");

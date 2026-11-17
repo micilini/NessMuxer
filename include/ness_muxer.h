@@ -4,7 +4,9 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#ifdef _WIN32
+#if defined(NESSMUXER_STATIC)
+  #define NESS_API
+#elif defined(_WIN32)
   #ifdef NESSMUXER_EXPORTS
     #define NESS_API __declspec(dllexport)
   #else
@@ -75,6 +77,9 @@ NESS_API int ness_muxer_write_frame_pts(NessMuxer* muxer,
 
 
 NESS_API int ness_muxer_close(NessMuxer* muxer);
+/* Consumes an owned muxer, including its outer allocation; accepts NULL.
+ * close keeps the object available for final counters/error inspection. */
+NESS_API void ness_muxer_destroy(NessMuxer* muxer);
 
 
 NESS_API const char* ness_muxer_error(const NessMuxer* muxer);

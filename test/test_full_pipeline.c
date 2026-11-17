@@ -33,7 +33,7 @@ int main(void)
     uint8_t* nv12_buf = NULL;
     const char* output_path = "test_full_pipeline.mkv";
 
-    printf("\n=== NessMuxer - Full Pipeline Test (Phase 7) ===\n\n");
+    printf("\n=== NessMuxer - Full Pipeline Test ===\n\n");
 
     nv12_buf = (uint8_t*)malloc(nv12_size);
     if (!nv12_buf) {

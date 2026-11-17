@@ -186,7 +186,7 @@ int main(void)
     int cabac_size = 0;
     int rc;
 
-    printf("=== N.148 Encoder Test (Fase 4 + Fase 7.1) ===\n");
+    printf("=== N.148 Encoder Test ===\n");
 
     rc = run_one_case("MAIN/CAVLC", N148_PROFILE_MAIN, N148_ENTROPY_CAVLC, &cavlc_size);
     if (rc != 0) {

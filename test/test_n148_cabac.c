@@ -209,7 +209,7 @@ int main(void)
 {
     int rc = 0;
 
-    printf("=== NessMuxer - Teste Fase 7 (CABAC/CAVLC dual-mode) ===\n\n");
+    printf("=== NessMuxer - Teste CABAC/CAVLC dual-mode ===\n\n");
 
     if ((rc = test_signed_mag_roundtrip()) != 0) return rc;
     if ((rc = test_mv_roundtrip()) != 0) return 4;

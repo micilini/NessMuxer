@@ -67,7 +67,7 @@ int main(void)
 
     n148_reorder_free(&q);
 
-    printf("=== N.148 GOP Planner Test (Fase C) ===\n");
+    printf("=== N.148 GOP Planner Test ===\n");
     printf("  [PASS] I frame sai primeiro\n");
     printf("  [PASS] ancora P sai antes do B intermediario\n");
     printf("  [PASS] flush final libera o B restante\n");

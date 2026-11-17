@@ -1,0 +1,5 @@
+# Preserve pinned upstream header bytes, including line endings, on checkout.
+third_party/nv-codec-headers/** -text
+third_party/amf/** -text
+third_party/x264-abi164/** -text
+third_party/*.zip -text

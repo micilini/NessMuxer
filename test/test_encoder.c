@@ -75,7 +75,7 @@ int main(void)
     uint8_t* codec_private = NULL;
     int codec_private_size = 0;
 
-    printf("\n=== NessMuxer - Teste Fase 3 (Encoder MF) ===\n\n");
+    printf("\n=== NessMuxer - Teste Encoder MF ===\n\n");
 
    
     nv12_buf = (uint8_t*)malloc(nv12_size);
@@ -185,7 +185,7 @@ int main(void)
     free(nv12_buf);
 
     if (g_packet_count > 0 && g_keyframe_count > 0 && codec_private_size > 0) {
-        printf("=== SUCESSO: Encoder Fase 3 funcionando! ===\n\n");
+        printf("=== SUCESSO: Encoder MF funcionando! ===\n\n");
         return 0;
     } else {
         printf("=== FALHA: Alguns testes nao passaram ===\n\n");

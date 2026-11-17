@@ -253,7 +253,7 @@ int main(void)
 {
     int rc = 0;
 
-    printf("=== N.148 Tools Integration Test (Fase 9) ===\n\n");
+    printf("=== N.148 Command-line Integration Test ===\n\n");
 
     if ((rc = test_nal_parsing()) != 0) return rc;
     if ((rc = test_frame_header_parse()) != 0) return rc;

@@ -96,7 +96,7 @@ int main(void)
 {
     int rc = 0;
 
-    printf("=== N.148 Metrics Test (Fase 8.3) ===\n\n");
+    printf("=== N.148 Metrics Test ===\n\n");
 
     if ((rc = test_psnr_identical()) != 0) return rc;
     if ((rc = test_psnr_different()) != 0) return rc;

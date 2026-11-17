@@ -73,3 +73,13 @@ desktop.ini
 third_party/*
 !third_party/.gitkeep
 !third_party/README.md
+!third_party/nv-codec-headers/
+!third_party/nv-codec-headers/**
+!third_party/amf/
+!third_party/amf/**
+!third_party/x264-abi164/
+!third_party/x264-abi164/**
+!third_party/libvpl-2.17.0.source.zip
+!cmake/
+!cmake/**
+.out/

@@ -25,7 +25,7 @@ int main(void)
     if (c < 84 || c > 100)
         return 3;
 
-    printf("=== N.148 Interpolation Test (Fase 5.2) ===\n");
+    printf("=== N.148 Interpolation Test ===\n");
     printf("  [PASS] integer sample OK\n");
     printf("  [PASS] qpel horizontal interpolation OK\n");
     printf("  [PASS] qpel vertical interpolation OK\n");

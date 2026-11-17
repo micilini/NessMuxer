@@ -89,7 +89,7 @@ int main(void)
 {
     int rc = 0;
 
-    printf("=== N.148 Profiles Test (Fase 8.2) ===\n\n");
+    printf("=== N.148 Profiles Test ===\n\n");
 
     if ((rc = test_main_profile_limits()) != 0) return rc;
     if ((rc = test_main_profile_rejects_cabac()) != 0) return rc;

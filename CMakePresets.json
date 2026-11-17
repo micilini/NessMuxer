@@ -1,0 +1,44 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "windows-x64",
+      "displayName": "Windows x64 native encoders",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "toolset": "v145",
+      "binaryDir": "${sourceDir}/.out/windows-x64",
+      "cacheVariables": {
+        "NESS_BUILD_SHARED": "ON",
+        "NESS_BUILD_TESTS": "ON",
+        "NESS_BUILD_V2_TESTS": "ON",
+        "NESS_USE_MEDIA_FOUNDATION": "OFF",
+        "NESS_USE_N148": "ON",
+        "NESS_USE_X264_V2": "ON",
+        "NESS_USE_QSV_V2": "ON",
+        "NESS_USE_NVENC_V2": "ON",
+        "NESS_USE_AMF_V2": "ON"
+      }
+    },
+    {
+      "name": "portable",
+      "displayName": "Portable container and codec build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/.out/portable",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "NESS_BUILD_TESTS": "ON",
+        "NESS_BUILD_V2_TESTS": "ON",
+        "NESS_USE_N148": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-x64", "configurePreset": "windows-x64", "configuration": "Release" },
+    { "name": "portable", "configurePreset": "portable" }
+  ],
+  "testPresets": [
+    { "name": "windows-x64", "configurePreset": "windows-x64", "configuration": "Release", "output": { "outputOnFailure": true }, "filter": { "exclude": { "label": "hardware" } } },
+    { "name": "portable", "configurePreset": "portable", "output": { "outputOnFailure": true } }
+  ]
+}

@@ -331,7 +331,7 @@ static int nvenc_fetch_bitstream(NvencEncoder* e, int64_t pts_hns, ness_packet_c
 {
     NV_ENC_LOCK_BITSTREAM lock_bs;
     NVENCSTATUS st;
-    NessEncodedPacket pkt;
+    NessEncodedPacket pkt = {0};
     int is_key = 0;
 
     memset(&lock_bs, 0, sizeof(lock_bs));
@@ -368,6 +368,8 @@ static int nvenc_fetch_bitstream(NvencEncoder* e, int64_t pts_hns, ness_packet_c
     pkt.data = e->pending_packet;
     pkt.size = e->pending_packet_size;
     pkt.pts_hns = e->pending_pts_hns;
+    /* frameIntervalP=1 explicitly disables B pictures in this legacy backend. */
+    pkt.dts_hns = e->pending_pts_hns;
     pkt.duration_hns = e->pending_duration_hns;
     pkt.is_keyframe = e->pending_keyframe;
 

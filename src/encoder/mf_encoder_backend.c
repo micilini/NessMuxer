@@ -10,7 +10,7 @@ typedef struct
 static int mf_packet_bridge(void* userdata, const MFEncodedPacket* packet)
 {
     MFCallbackBridge* bridge = (MFCallbackBridge*)userdata;
-    NessEncodedPacket pkt;
+    NessEncodedPacket pkt = {0};
 
     if (!bridge || !bridge->cb || !packet)
         return -1;
@@ -18,6 +18,8 @@ static int mf_packet_bridge(void* userdata, const MFEncodedPacket* packet)
     pkt.data = packet->data;
     pkt.size = packet->size;
     pkt.pts_hns = packet->pts_hns;
+    /* This legacy MF configuration uses Baseline without B pictures. */
+    pkt.dts_hns = packet->pts_hns;
     pkt.duration_hns = packet->duration_hns;
     pkt.is_keyframe = packet->is_keyframe;
 

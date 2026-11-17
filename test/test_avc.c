@@ -357,7 +357,7 @@ static void test_edge_cases(void)
 
 int main(void)
 {
-    printf("\n=== NessMuxer - Testes Fase 2 (AVC Utils) ===\n\n");
+    printf("\n=== NessMuxer - Testes AVC Utils ===\n\n");
 
     test_find_startcode();
     test_extract_sps_pps();

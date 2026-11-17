@@ -55,6 +55,7 @@ typedef struct
     uint8_t*      pending_packet;
     int           pending_packet_size;
     int64_t       pending_pts_hns;
+    int64_t       pending_dts_hns;
     int64_t       pending_duration_hns;
     int           pending_keyframe;
     int           pending_ready;
@@ -290,8 +291,9 @@ static int x264_store_encoded_access_unit(X264Encoder* e, x264_nal_t* nals, int 
 
     e->pending_packet = copy;
     e->pending_packet_size = total;
-    e->pending_pts_hns = (int64_t)pic_out->i_pts * (10000000LL / e->fps);
-    e->pending_duration_hns = 10000000LL / e->fps;
+    e->pending_pts_hns = (int64_t)pic_out->i_pts * 10000000LL / e->fps;
+    e->pending_dts_hns = (int64_t)pic_out->i_dts * 10000000LL / e->fps;
+    e->pending_duration_hns = ((int64_t)pic_out->i_pts + 1) * 10000000LL / e->fps - e->pending_pts_hns;
     e->pending_keyframe = pic_out->b_keyframe ? 1 : 0;
     e->pending_ready = 1;
 
@@ -473,7 +475,7 @@ static int x264_submit_frame(void* ctx, const uint8_t* nv12, int nv12_size)
 static int x264_receive_packets(void* ctx, ness_packet_callback cb, void* userdata)
 {
     X264Encoder* e = (X264Encoder*)ctx;
-    NessEncodedPacket pkt;
+    NessEncodedPacket pkt = {0};
     int ret;
 
     if (!e || !cb)
@@ -485,6 +487,7 @@ static int x264_receive_packets(void* ctx, ness_packet_callback cb, void* userda
     pkt.data = e->pending_packet;
     pkt.size = e->pending_packet_size;
     pkt.pts_hns = e->pending_pts_hns;
+    pkt.dts_hns = e->pending_dts_hns;
     pkt.duration_hns = e->pending_duration_hns;
     pkt.is_keyframe = e->pending_keyframe;
 
