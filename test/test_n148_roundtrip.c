@@ -153,7 +153,7 @@ int main(void)
     if (g_packet_sizes[2] >= g_packet_sizes[0])
         return 19;
 
-    printf("=== N.148 Roundtrip B-frame Test (Fase D) ===\n");
+    printf("=== N.148 Roundtrip B-frame Test ===\n");
     printf("  [PASS] coding order com 3 pacotes (I / P / B)\n");
     printf("  [PASS] decoder reordena saida para I / B / P\n");
     printf("  [PASS] B-frame menor que I-frame (%d < %d)\n", g_packet_sizes[2], g_packet_sizes[0]);

@@ -1,6 +1,9 @@
 #include "../include/ness_muxer.h"
 #include "encoder/encoder.h"
 #include "mkv_muxer.h"
+#ifdef _WIN32
+#include "v2/legacy_bridge.h"
+#endif
 
 #ifdef NESS_HAVE_N148
 #include "encoder/n148/n148_encoder.h"
@@ -11,6 +14,7 @@
 #include <string.h>
 
 struct NessMuxer {
+    void*                   v2_bridge;
     void*                   encoder_ctx;
     const NessEncoderVtable* encoder_vtable;
     MkvMuxer*               muxer;
@@ -131,6 +135,20 @@ NESS_API int ness_muxer_open(NessMuxer** out_muxer, const NessMuxerConfig* confi
     m->output_path[sizeof(m->output_path) - 1] = '\0';
     m->config.output_path = m->output_path;
 
+#ifdef _WIN32
+    if (config->codec_type != NESS_CODEC_N148 &&
+        (config->encoder_type == NESS_ENCODER_MEDIA_FOUNDATION
+#if !defined(NESS_HAVE_NVENC) && !defined(NESS_HAVE_X264)
+        || config->encoder_type == NESS_ENCODER_AUTO
+#endif
+        )) {
+        int status = ness_legacy_v2_create(&m->v2_bridge, config, m->error, sizeof(m->error));
+        if (status != NESS_OK) { free(m); return status; }
+        *out_muxer = m;
+        return NESS_OK;
+    }
+#endif
+
     enc_type = (NessEncoderType)config->encoder_type;
 
     if (config->codec_type == NESS_CODEC_N148)
@@ -184,6 +202,13 @@ NESS_API int ness_muxer_write_frame(NessMuxer* muxer,
 
     if (!muxer || !nv12_data || nv12_size <= 0)
         return NESS_ERROR_PARAM;
+#ifdef _WIN32
+    if (muxer->v2_bridge) {
+        int status = ness_legacy_v2_write(muxer->v2_bridge, nv12_data, nv12_size, 0, 0, muxer->error, sizeof(muxer->error));
+        ness_legacy_v2_counts(muxer->v2_bridge, &muxer->frames_submitted, &muxer->packets_written);
+        return status;
+    }
+#endif
 
     if (!muxer->encoder_vtable || !muxer->encoder_vtable->submit_frame || !muxer->encoder_vtable->receive_packets)
         return NESS_ERROR_STATE;
@@ -211,6 +236,13 @@ int ness_muxer_write_frame_pts(NessMuxer* muxer, const uint8_t* nv12_data, int n
     int ret;
     if (!muxer || !nv12_data || nv12_size <= 0)
         return NESS_ERROR_PARAM;
+#ifdef _WIN32
+    if (muxer->v2_bridge) {
+        int status = ness_legacy_v2_write(muxer->v2_bridge, nv12_data, nv12_size, pts_hns, 1, muxer->error, sizeof(muxer->error));
+        ness_legacy_v2_counts(muxer->v2_bridge, &muxer->frames_submitted, &muxer->packets_written);
+        return status;
+    }
+#endif
 
     if (!muxer->encoder_vtable || !muxer->encoder_vtable->submit_frame || !muxer->encoder_vtable->receive_packets)
         return NESS_ERROR_STATE;
@@ -244,6 +276,10 @@ NESS_API int ness_muxer_close(NessMuxer* muxer)
 
     if (!muxer)
         return NESS_ERROR_PARAM;
+#ifdef _WIN32
+    if (muxer->v2_bridge)
+        return ness_legacy_v2_close(muxer->v2_bridge, &muxer->frames_submitted, &muxer->packets_written, muxer->error, sizeof(muxer->error));
+#endif
 
     if (muxer->encoder_ctx && muxer->encoder_vtable) {
         ret = muxer->encoder_vtable->drain(muxer->encoder_ctx, on_encoded_packet, muxer);
@@ -269,6 +305,16 @@ NESS_API const char* ness_muxer_error(const NessMuxer* muxer)
 {
     if (!muxer) return "null muxer";
     return muxer->error;
+}
+
+NESS_API void ness_muxer_destroy(NessMuxer* muxer)
+{
+    if (!muxer) return;
+    ness_muxer_close(muxer);
+#ifdef _WIN32
+    if (muxer->v2_bridge) ness_legacy_v2_destroy(muxer->v2_bridge);
+#endif
+    free(muxer);
 }
 
 NESS_API int64_t ness_muxer_frame_count(const NessMuxer* muxer)

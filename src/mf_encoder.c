@@ -102,6 +102,8 @@ struct MFEncoder {
     int             frames_submitted;
     int             stream_started;
     int             draining;
+    int             com_initialized;
+    int             mf_initialized;
 
    
     uint8_t*        codec_private;
@@ -288,8 +290,16 @@ static int receive_one_packet(MFEncoder* enc, mf_packet_callback cb, void* userd
     }
 
    
-    IMFSample_GetSampleTime(out_sample, &sample_time);
-    IMFSample_GetSampleDuration(out_sample, &sample_duration);
+    hr = IMFSample_GetSampleTime(out_sample, &sample_time);
+    if (FAILED(hr)) {
+        IMFMediaBuffer_Unlock(media_buf);
+        IMFMediaBuffer_Release(media_buf);
+        IMFSample_Release(out_sample);
+        set_error(enc, "Encoder output timestamp is missing");
+        return -1;
+    }
+    if (FAILED(IMFSample_GetSampleDuration(out_sample, &sample_duration)))
+        sample_duration = enc->frame_duration_hns;
 
     hr = IMFAttributes_GetUINT32((IMFAttributes*)out_sample,
                                   &LOCAL_MFSampleExtension_CleanPoint,
@@ -357,12 +367,14 @@ int mf_encoder_create(MFEncoder** out_enc, int width, int height,
 
    
     hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    enc->com_initialized = SUCCEEDED(hr);
     if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) {
         set_error(enc, "CoInitializeEx falhou");
         goto fail;
     }
 
     hr = MFStartup(MF_VERSION, MFSTARTUP_NOSOCKET);
+    enc->mf_initialized = SUCCEEDED(hr);
     if (FAILED(hr)) {
         set_error(enc, "MFStartup falhou");
         goto fail;
@@ -614,6 +626,11 @@ int mf_encoder_drain(MFEncoder* enc, mf_packet_callback cb, void* userdata)
         return 0;
 
    
+    hr = IMFTransform_ProcessMessage(enc->mft, MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
+    if (FAILED(hr)) {
+        set_error(enc, "NOTIFY_END_OF_STREAM failed");
+        return -1;
+    }
     hr = IMFTransform_ProcessMessage(enc->mft, MFT_MESSAGE_COMMAND_DRAIN, 0);
     if (FAILED(hr)) {
         set_error(enc, "COMMAND_DRAIN falhou");
@@ -673,8 +690,8 @@ void mf_encoder_destroy(MFEncoder* enc)
         enc->output_buf = NULL;
     }
 
-    MFShutdown();
-    CoUninitialize();
+    if (enc->mf_initialized) MFShutdown();
+    if (enc->com_initialized) CoUninitialize();
 
     free(enc);
 }

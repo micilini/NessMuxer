@@ -1,7 +1,7 @@
 #include "encoder.h"
 #include <stddef.h>
 
-#ifdef _WIN32
+#ifdef NESS_HAVE_MEDIA_FOUNDATION
 extern const NessEncoderVtable g_mf_encoder_vtable;
 #endif
 
@@ -45,7 +45,7 @@ const NessEncoderVtable* ness_encoder_get(NessEncoderType type)
             return ness_encoder_get_best();
 
         case NESS_ENCODER_MEDIA_FOUNDATION:
-#ifdef _WIN32
+#ifdef NESS_HAVE_MEDIA_FOUNDATION
             return &g_mf_encoder_vtable;
 #else
             return NULL;
@@ -101,7 +101,7 @@ const NessEncoderVtable* ness_encoder_get_best(void)
 #ifdef NESS_HAVE_VIDEOTOOLBOX
         &g_vtbox_encoder_vtable,
 #endif
-#ifdef _WIN32
+#ifdef NESS_HAVE_MEDIA_FOUNDATION
         &g_mf_encoder_vtable,
 #endif
 #ifdef NESS_HAVE_V4L2

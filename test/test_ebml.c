@@ -401,7 +401,7 @@ static void test_segment_structure(void)
 
 int main(void)
 {
-    printf("\n=== NessMuxer - Testes Fase 1 (EBML + I/O) ===\n\n");
+    printf("\n=== NessMuxer - Testes EBML + I/O ===\n\n");
 
     test_buffered_io();
     test_nio_fill();

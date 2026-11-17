@@ -223,7 +223,7 @@ static void test_decoder_init_from_header(void)
 
 int main(void)
 {
-    printf("=== N.148 Codec Tests (Fase 1 + 2) ===\n\n");
+    printf("=== N.148 Codec Tests ===\n\n");
 
     test_seq_header_roundtrip();
     test_seq_header_bad_magic();

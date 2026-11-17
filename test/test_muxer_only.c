@@ -257,7 +257,7 @@ static void test_invalid_params(void)
 
 int main(void)
 {
-    printf("\n=== NessMuxer - MKV Muxer Tests (Phase 4/5/6) ===\n\n");
+    printf("\n=== NessMuxer - MKV Muxer Tests ===\n\n");
 
     test_open_close_empty();
     test_write_100_frames();

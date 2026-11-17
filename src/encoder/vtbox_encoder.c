@@ -489,7 +489,7 @@ static int vtbox_submit_frame(void* ctx, const uint8_t* nv12, int nv12_size)
 static int vtbox_receive_packets(void* ctx, ness_packet_callback cb, void* userdata)
 {
     VtboxEncoder* e = (VtboxEncoder*)ctx;
-    NessEncodedPacket pkt;
+    NessEncodedPacket pkt = {0};
     int ret;
 
     if (!e || !cb)
@@ -501,6 +501,7 @@ static int vtbox_receive_packets(void* ctx, ness_packet_callback cb, void* userd
     pkt.data         = e->pending_packet;
     pkt.size         = e->pending_packet_size;
     pkt.pts_hns      = e->pending_pts_hns;
+    pkt.dts_hns      = e->pending_pts_hns; /* AllowFrameReordering is false. */
     pkt.duration_hns = e->pending_duration_hns;
     pkt.is_keyframe  = e->pending_keyframe;
 
@@ -530,16 +531,18 @@ static int vtbox_drain(void* ctx, ness_packet_callback cb, void* userdata)
 
    
     if (e->pending_ready) {
-        NessEncodedPacket pkt;
+        NessEncodedPacket pkt = {0};
 
         pkt.data         = e->pending_packet;
         pkt.size         = e->pending_packet_size;
         pkt.pts_hns      = e->pending_pts_hns;
+        pkt.dts_hns      = e->pending_pts_hns;
         pkt.duration_hns = e->pending_duration_hns;
         pkt.is_keyframe  = e->pending_keyframe;
 
-        cb(userdata, &pkt);
+        int callback_result = cb(userdata, &pkt);
         vtbox_clear_pending(e);
+        if (callback_result != 0) return callback_result;
     }
 
     return 0;

@@ -1,0 +1,32 @@
+EXPORTS
+    ness_encoder_create_v2
+    ness_encoder_probe_v2
+    ness_encoder_info_get_v2
+    ness_encoder_submit_cpu_v2
+    ness_encoder_submit_gpu_v2
+    ness_input_completion_get_v2
+    ness_input_release_v2
+    ness_encoder_receive_v2
+    ness_encoder_description_v2
+    ness_encoder_drain_v2
+    ness_encoder_discard_v2
+    ness_encoder_stats_get_v2
+    ness_encoder_release_v2
+    ness_packet_copy_v2
+    ness_packet_view_get_v2
+    ness_packet_release_v2
+    ness_codec_copy_v2
+    ness_codec_view_get_v2
+    ness_codec_release_v2
+    ness_mkv_open_v2
+    ness_mkv_set_codec_v2
+    ness_mkv_write_packet_v2
+    ness_mkv_finalize_v2
+    ness_mkv_discard_v2
+    ness_mkv_stats_get_v2
+    ness_mkv_release_v2
+    ness_runtime_stats_get_v2
+
+    ness_encoder_create_gpu_v2
+    ness_encoder_gpu_info_get_v2
+    ness_gpu_runtime_stats_get_v2

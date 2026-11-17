@@ -1,0 +1,50 @@
+name: Build NessMuxer libraries
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nessmuxer-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-2025-vs2026
+            preset: windows-x64
+          - name: linux-x64
+            os: ubuntu-24.04
+            preset: portable
+          - name: macos-arm64
+            os: macos-15
+            preset: portable
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }} --parallel 3
+      - name: Run tests without physical GPU requirements
+        run: ctest --preset ${{ matrix.preset }} --no-tests=error
+      - name: Install library package
+        run: cmake --install .out/${{ matrix.preset }} --config Release --prefix .out/package
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: nessmuxer-${{ matrix.name }}
+          path: .out/package
+          if-no-files-found: error
+          retention-days: 14
