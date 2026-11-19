@@ -43,7 +43,12 @@ struct Runtime {
     uint32_t version{};
     nv_checked(maximum(&version),"NVENC driver version query failed",1);
     constexpr uint32_t required=(NVENCAPI_MAJOR_VERSION<<4)|NVENCAPI_MINOR_VERSION;
-    if(version<required) fail(NESS_V2_E_UNAVAILABLE,1,"NVENC driver API is older than the compiled SDK",static_cast<int32_t>(version));
+    if(version<required) {
+      const auto message=std::string("NVIDIA driver supports NVENC API ")+std::to_string(version>>4)+"."+
+        std::to_string(version&15)+"; this encoder requires API "+std::to_string(NVENCAPI_MAJOR_VERSION)+"."+
+        std::to_string(NVENCAPI_MINOR_VERSION)+" or later. Update the NVIDIA graphics driver or select Automatic/CPU mode.";
+      fail(NESS_V2_E_UNAVAILABLE,1,message.c_str(),static_cast<int32_t>(version));
+    }
     api.version=NV_ENCODE_API_FUNCTION_LIST_VER;
     nv_checked(create(&api),"NVENC function table creation failed",1);
     if(!api.nvEncOpenEncodeSessionEx || !api.nvEncGetEncodeGUIDCount || !api.nvEncGetEncodeGUIDs ||

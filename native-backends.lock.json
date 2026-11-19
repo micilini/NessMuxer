@@ -30,20 +30,21 @@
   "authorship": "Native wrappers for public encoder APIs. third_party contains unmodified vendor API headers and their notices.",
   "qualification": "Windows x64 only; platform loader branches do not claim Linux/macOS support",
   "nvenc": {
-    "version": "13.1.15.0",
-    "revision": "0a6fba9a2820628b8103464f4c8753ee05838baa",
+    "version": "12.0.16.1",
+    "revision": "15e89d033a5102b735f5a3d2fda6eb1d824e3953",
     "url": "https://github.com/FFmpeg/nv-codec-headers",
-    "downloadArchiveSha256": "01f93436056a66b889192d28858eb9e49d69bca7a34ca95f37043a78fbc7c10d",
     "license": "MIT",
     "licenseFile": "third_party/nv-codec-headers/LICENSE.txt",
     "files": {
-      "third_party/nv-codec-headers/include/nvEncodeAPI.h": "8776fddcb8febc6aec4d73989b1f21831eb30306bc583da55b4bf0c14a1dc228",
+      "third_party/nv-codec-headers/include/nvEncodeAPI.h": "808db2a21232839ee8a6057601f1964e90b20385f6dbf080f3cd33f6470c66c4",
       "third_party/nv-codec-headers/LICENSE.txt": "d694f76a4ed5e8fded956e7afd1a0cc8907b330e96a96d4448855c02f29e4d70"
     },
     "runtimeOptionalAtLoad": true,
     "runtimeSource": "Installed graphics driver; system32-only DLL search",
     "hardwareQualification": "Pending on supported physical hardware",
-    "releaseApproved": false
+    "releaseApproved": false,
+    "headerUrl": "https://raw.githubusercontent.com/FFmpeg/nv-codec-headers/15e89d033a5102b735f5a3d2fda6eb1d824e3953/include/ffnvcodec/nvEncodeAPI.h",
+    "compatibility": "NVENC API 12.0 minimum; H.264 D3D11/NV12 capabilities are probed on the actual adapter."
   },
   "amf": {
     "version": "1.4.36",

@@ -1,4 +1,5 @@
 #include "core.hpp"
+#include "ness_buffered_io.hpp"
 #include <algorithm>
 #include <bit>
 #include <filesystem>
@@ -225,6 +226,8 @@ void PacketCollector::discard() noexcept {
 class FileSink final : public Sink {
 #ifdef _WIN32
     HANDLE handle_{INVALID_HANDLE_VALUE};
+    std::unique_ptr<nessmuxer::io::BufferedWrites> writes_;
+    uint64_t position_{};
     static void checked(bool ok, const char *operation) {
         if (!ok)
             fail(-2, 4, operation, static_cast<int32_t>(HRESULT_FROM_WIN32(GetLastError())));
@@ -248,39 +251,49 @@ class FileSink final : public Sink {
         handle_ = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, nullptr,
                               CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
         checked(handle_ != INVALID_HANDLE_VALUE, "Cannot create new output file");
+        try {
+            writes_ = std::make_unique<nessmuxer::io::BufferedWrites>(64 * 1024 * 1024,
+                [this](uint64_t offset, std::span<const uint8_t> bytes) {
+                    LARGE_INTEGER at{}; at.QuadPart = static_cast<LONGLONG>(offset);
+                    checked(SetFilePointerEx(handle_, at, nullptr, FILE_BEGIN) != 0, "Output seek failed");
+                    DWORD done{};
+                    checked(WriteFile(handle_, bytes.data(), static_cast<DWORD>(bytes.size()), &done, nullptr) != 0,
+                        "Output write failed");
+                    if (done != bytes.size()) fail(NESS_V2_E_IO, NESS_V2_STAGE_OUTPUT, "Short output write");
+                });
+        } catch (...) { CloseHandle(handle_); handle_ = INVALID_HANDLE_VALUE; throw; }
     }
     ~FileSink() {
+        if (writes_) { try { writes_->finish(); } catch (...) {} }
         if (handle_ != INVALID_HANDLE_VALUE)
             CloseHandle(handle_);
     }
     void write(std::span<const uint8_t> bytes) override {
-        while (!bytes.empty()) {
-            DWORD done{};
-            const auto count = static_cast<DWORD>((std::min)(bytes.size(), size_t{1024 * 1024}));
-            checked(WriteFile(handle_, bytes.data(), count, &done, nullptr) != 0, "Output write failed");
-            if (done != count)
-                fail(-2, 4, "Short output write");
-            bytes = bytes.subspan(done);
+        if (bytes.size() > INT64_MAX - position_) fail(NESS_V2_E_ARGUMENT, NESS_V2_STAGE_OUTPUT, "Output size overflow");
+        try { writes_->write(position_, bytes); }
+        catch (const nessmuxer::io::BufferFull &) {
+            fail(NESS_V2_E_BACKPRESSURE, NESS_V2_STAGE_OUTPUT, "Recording storage backlog exceeded its 64 MiB output buffer");
         }
+        position_ += bytes.size();
     }
     uint64_t tell() override {
-        LARGE_INTEGER zero{}, position{};
-        checked(SetFilePointerEx(handle_, zero, &position, FILE_CURRENT) != 0, "Output tell failed");
-        return static_cast<uint64_t>(position.QuadPart);
+        writes_->check();
+        return position_;
     }
     void seek(uint64_t offset) override {
         if (offset > INT64_MAX)
             fail(-3, 4, "Output seek overflow");
-        LARGE_INTEGER position{};
-        position.QuadPart = static_cast<LONGLONG>(offset);
-        checked(SetFilePointerEx(handle_, position, nullptr, FILE_BEGIN) != 0, "Output seek failed");
+        writes_->check(); position_ = offset;
     }
-    void flush() override { checked(FlushFileBuffers(handle_) != 0, "Output flush failed"); }
+    void flush() override { writes_->drain(); checked(FlushFileBuffers(handle_) != 0, "Output flush failed"); }
     void close() override {
         if (handle_ == INVALID_HANDLE_VALUE)
             return;
-        checked(CloseHandle(handle_) != 0, "Output close failed");
-        handle_ = INVALID_HANDLE_VALUE;
+        std::exception_ptr failure;
+        try { writes_->finish(); } catch (...) { failure = std::current_exception(); }
+        const auto file = std::exchange(handle_, INVALID_HANDLE_VALUE);
+        if (!CloseHandle(file) && !failure) checked(false, "Output close failed");
+        if (failure) std::rethrow_exception(failure);
     }
 #else
     FILE *file_{};

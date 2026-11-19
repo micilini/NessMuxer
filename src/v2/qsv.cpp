@@ -20,8 +20,14 @@ using Microsoft::WRL::ComPtr;
 void checked_hr(HRESULT result,const char *message) {
   if (FAILED(result)) fail(NESS_V2_E_ENCODER,2,message,result);
 }
-void checked_mfx(mfxStatus result,const char *message) {
-  if (result<0) fail(NESS_V2_E_ENCODER,2,message,result);
+void checked_mfx(mfxStatus result,const char *message,uint32_t stage=NESS_V2_STAGE_ENCODER) {
+  if(result>=0) return;
+  // Unsupported capabilities discovered before Start may select another route.
+  // A device failure or an unsupported operation after Start must remain fatal.
+  const bool unavailable=stage==NESS_V2_STAGE_CONFIG &&
+    (result==MFX_ERR_UNSUPPORTED || result==MFX_ERR_NOT_FOUND || result==MFX_ERR_NOT_IMPLEMENTED);
+  fail(unavailable?NESS_V2_E_UNAVAILABLE:result==MFX_ERR_MEMORY_ALLOC?NESS_V2_E_ALLOC:NESS_V2_E_ENCODER,
+    stage,message,result);
 }
 struct Loader {
   mfxLoader value=MFXLoad();
@@ -29,11 +35,11 @@ struct Loader {
   void filter(const char *name,mfxU32 data) {
     if(!value) fail(NESS_V2_E_UNAVAILABLE,1,"oneVPL dispatcher unavailable");
     const auto config=MFXCreateConfig(value);
-    if(!config) fail(NESS_V2_E_UNAVAILABLE,1,"oneVPL filter allocation failed");
+    if(!config) fail(NESS_V2_E_ALLOC,1,"oneVPL filter allocation failed");
     mfxVariant variant{}; variant.Version.Version=MFX_VARIANT_VERSION;
     variant.Type=MFX_VARIANT_TYPE_U32; variant.Data.U32=data;
     checked_mfx(MFXSetConfigFilterProperty(config,reinterpret_cast<const mfxU8 *>(name),variant),
-      "oneVPL hardware filter rejected");
+      "oneVPL hardware filter rejected",NESS_V2_STAGE_CONFIG);
   }
 };
 struct Driver {
@@ -152,6 +158,9 @@ class Qsv final : public Encoder {
     loader_.filter("mfxImplDescription.Impl",MFX_IMPL_TYPE_HARDWARE);
     loader_.filter("mfxImplDescription.AccelerationMode",MFX_ACCEL_MODE_VIA_D3D11);
     loader_.filter("mfxImplDescription.VendorID",0x8086);
+    // Internal, reference-counted encode surfaces are a 2.0 API. The dispatcher
+    // header release (2.17) is deliberately not a minimum driver requirement.
+    loader_.filter("mfxImplDescription.ApiVersion.Version",2u<<16);
     loader_.filter("mfxImplDescription.mfxEncoderDescription.encoder.CodecID",MFX_CODEC_AVC);
     for(mfxU32 index=0;index<64;++index) {
       mfxHDL handle{};
@@ -165,7 +174,7 @@ class Qsv final : public Encoder {
         description_ext->VendorID==0x8086;
       MFXDispReleaseImplDescription(loader_.value,handle);
       if(!matches) continue;
-      checked_mfx(MFXCreateSession(loader_.value,index,&driver_.value),"Direct QSV session creation failed");
+      checked_mfx(MFXCreateSession(loader_.value,index,&driver_.value),"Direct QSV session creation failed",NESS_V2_STAGE_CONFIG);
       if(driver_.value) break;
     }
     if(!driver_.value) fail(NESS_V2_E_UNAVAILABLE,1,"No direct QSV runtime matches the selected adapter LUID");
@@ -222,11 +231,11 @@ class Qsv final : public Encoder {
     const auto query=MFXVideoENCODE_Query(driver_.value,&parameters,&queried);
     if(query==MFX_WRN_PARTIAL_ACCELERATION)
       fail(NESS_V2_E_UNAVAILABLE,1,"Direct QSV configuration requires partial software acceleration");
-    checked_mfx(query,"Direct QSV configuration unsupported");
+    checked_mfx(query,"Direct QSV configuration unsupported",NESS_V2_STAGE_CONFIG);
     const auto initialized=MFXVideoENCODE_Init(driver_.value,&parameters);
     if(initialized==MFX_WRN_PARTIAL_ACCELERATION)
       fail(NESS_V2_E_UNAVAILABLE,1,"Direct QSV initialization requires partial software acceleration");
-    checked_mfx(initialized,"Direct QSV encoder initialization failed");
+    checked_mfx(initialized,"Direct QSV encoder initialization failed",NESS_V2_STAGE_CONFIG);
     driver_.encoder_open=true;
     auto effective=parameters;
     checked_mfx(MFXVideoENCODE_GetVideoParam(driver_.value,&effective),"Direct QSV effective parameters unavailable");
